@@ -375,26 +375,26 @@ export const ProjectGanttChart = ({
 
       <div className="gantt-container overflow-x-auto">
         <div className="flex">
-          <div className="w-1/4 min-w-[200px] max-w-[300px] border-r">
-            <div className="h-10 border-b sticky top-0 bg-background flex items-center px-4 font-medium">
+          <div className="w-1/4 min-w-[200px] max-w-[300px] shrink-0 border-r">
+            <div className="h-10 border-b sticky top-0 z-20 bg-background flex items-center px-4 font-medium">
               Task / Phase
             </div>
             {sortedPhases.length === 0 ? (
-              <div className="px-4 py-2 text-muted-foreground italic">
+              <div className="h-10 border-b flex items-center px-4 text-muted-foreground italic truncate">
                 No phases yet. Click "Add Work Area" to create one.
               </div>
             ) : (
               sortedPhases.map((phase) => (
                 <div key={phase.id}>
                   <div
-                    className="px-4 py-2 border-b font-medium cursor-pointer hover:bg-muted/50 flex justify-between items-center"
+                    className="h-10 px-4 border-b font-medium cursor-pointer hover:bg-muted/50 flex justify-between items-center gap-2"
                     onClick={() => handleEditPhase(phase)}
                   >
-                    <div className="flex items-center flex-1">
+                    <div className="flex items-center flex-1 min-w-0">
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="p-0 h-6 w-6 mr-2"
+                        className="p-0 h-6 w-6 mr-2 shrink-0"
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleCollapsePhase(phase.id);
@@ -406,13 +406,13 @@ export const ProjectGanttChart = ({
                           <ChevronDown className="h-4 w-4" />
                         )}
                       </Button>
-                      {phase.name}
+                      <span className="truncate">{phase.name}</span>
                     </div>
                     {canEdit && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="p-0 h-6 w-6 opacity-50 hover:opacity-100 hover:bg-destructive/10"
+                        className="p-0 h-6 w-6 shrink-0 opacity-50 hover:opacity-100 hover:bg-destructive/10"
                         onClick={(e) => confirmDeletePhase(phase, e)}
                       >
                         <Trash2 className="h-4 w-4 text-destructive" />
@@ -422,10 +422,10 @@ export const ProjectGanttChart = ({
                   {!collapsedPhases[phase.id] && getTasksByPhase(phase.id).map((task) => (
                     <div
                       key={task.id}
-                      className="px-4 py-2 border-b pl-8 text-sm cursor-pointer hover:bg-muted/50"
+                      className="h-10 px-4 pl-8 border-b flex items-center text-sm cursor-pointer hover:bg-muted/50"
                       onClick={() => handleEditTask(task)}
                     >
-                      {task.title}
+                      <span className="truncate">{task.title}</span>
                     </div>
                   ))}
                 </div>
@@ -434,24 +434,24 @@ export const ProjectGanttChart = ({
 
             {unassignedTasks.length > 0 && (
               <div>
-                <div className="px-4 py-2 border-b font-medium flex items-center bg-muted/30">
+                <div className="h-10 px-4 border-b font-medium flex items-center bg-muted/30">
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="p-0 h-6 w-6 mr-2"
+                    className="p-0 h-6 w-6 mr-2 shrink-0"
                     onClick={() => setUnassignedCollapsed(c => !c)}
                   >
                     {unassignedCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
                   </Button>
-                  <span className="text-muted-foreground italic">Unassigned ({unassignedTasks.length})</span>
+                  <span className="text-muted-foreground italic truncate">Unassigned ({unassignedTasks.length})</span>
                 </div>
                 {!unassignedCollapsed && unassignedTasks.map((task) => (
                   <div
                     key={task.id}
-                    className="px-4 py-2 border-b pl-8 text-sm cursor-pointer hover:bg-muted/50"
+                    className="h-10 px-4 pl-8 border-b flex items-center text-sm cursor-pointer hover:bg-muted/50"
                     onClick={() => handleEditTask(task)}
                   >
-                    {task.title}
+                    <span className="truncate">{task.title}</span>
                   </div>
                 ))}
               </div>
@@ -459,11 +459,11 @@ export const ProjectGanttChart = ({
           </div>
 
           <div className="flex-1 relative">
-            <div className="flex border-b h-10 sticky top-0 bg-background">
+            <div className="flex border-b h-10 sticky top-0 z-20 bg-background">
               {dates.map((date, index) => (
                 <div
                   key={index}
-                  className={`text-center text-xs flex-1 py-2 border-r ${isWeekend(date) ? 'bg-muted/30' : ''}`}
+                  className={`flex-1 h-10 border-r flex flex-col items-center justify-center leading-tight text-center text-xs ${isWeekend(date) ? 'bg-muted/30' : ''}`}
                   style={{ minWidth: '40px' }}
                 >
                   <div>{format(date, 'EEE')}</div>
@@ -473,6 +473,9 @@ export const ProjectGanttChart = ({
             </div>
 
             <div className="relative">
+              {sortedPhases.length === 0 && (
+                <div className="relative h-10 border-b" />
+              )}
               {sortedPhases.map((phase) => {
                 const psd = phase.start_date || phase.startDate;
                 const ped = phase.end_date || phase.endDate;
@@ -503,9 +506,44 @@ export const ProjectGanttChart = ({
                         </TooltipContent>
                       </Tooltip>
                     )}
+
+                    {/* When collapsed, the rolled-up task bar lives inside the phase row itself,
+                        so the right side keeps exactly one row per left-column cell. */}
+                    {collapsedPhases[phase.id] && (() => {
+                      const timespan = calculatePhaseTimespan(phase.id);
+                      const phaseTasks = getTasksByPhase(phase.id);
+
+                      if (!timespan || !timespan.start || !timespan.end || phaseTasks.length === 0) {
+                        return null;
+                      }
+
+                      return (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <div
+                              className="absolute h-4 top-3 rounded bg-blue-400 cursor-pointer"
+                              style={{
+                                left: `${calculateItemPosition(timespan.start.toISOString(), timespan.end.toISOString()).left}%`,
+                                width: `${calculateItemPosition(timespan.start.toISOString(), timespan.end.toISOString()).width}%`,
+                              }}
+                              onClick={() => toggleCollapsePhase(phase.id)}
+                            />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <div className="text-sm font-medium">{phase.name} Tasks</div>
+                            <div className="text-xs">
+                              {format(timespan.start, 'MMM d, yyyy')} - {format(timespan.end, 'MMM d, yyyy')}
+                            </div>
+                            <div className="text-xs mt-1">
+                              Contains {phaseTasks.length} task{phaseTasks.length !== 1 ? 's' : ''}
+                            </div>
+                          </TooltipContent>
+                        </Tooltip>
+                      );
+                    })()}
                   </div>
 
-                  {!collapsedPhases[phase.id] ? (
+                  {!collapsedPhases[phase.id] && (
                     getTasksByPhase(phase.id).map((task) => {
                       const tsd = task.start_date || task.startDate;
                       const ted = task.due_date || task.dueDate;
@@ -544,41 +582,6 @@ export const ProjectGanttChart = ({
                       </div>
                     );
                     })
-                  ) : (
-                    (() => {
-                      const timespan = calculatePhaseTimespan(phase.id);
-                      const phaseTasks = getTasksByPhase(phase.id);
-
-                      if (!timespan || !timespan.start || !timespan.end || phaseTasks.length === 0) {
-                        return null;
-                      }
-
-                      return (
-                        <div className="relative h-10 border-b">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div
-                                className="absolute h-4 top-3 rounded bg-blue-400 cursor-pointer"
-                                style={{
-                                  left: `${calculateItemPosition(timespan.start.toISOString(), timespan.end.toISOString()).left}%`,
-                                  width: `${calculateItemPosition(timespan.start.toISOString(), timespan.end.toISOString()).width}%`,
-                                }}
-                                onClick={() => toggleCollapsePhase(phase.id)}
-                              />
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <div className="text-sm font-medium">{phase.name} Tasks</div>
-                              <div className="text-xs">
-                                {format(timespan.start, 'MMM d, yyyy')} - {format(timespan.end, 'MMM d, yyyy')}
-                              </div>
-                              <div className="text-xs mt-1">
-                                Contains {phaseTasks.length} task{phaseTasks.length !== 1 ? 's' : ''}
-                              </div>
-                            </TooltipContent>
-                          </Tooltip>
-                        </div>
-                      );
-                    })()
                   )}
                 </div>
               );
