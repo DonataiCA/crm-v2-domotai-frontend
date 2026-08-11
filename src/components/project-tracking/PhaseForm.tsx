@@ -31,6 +31,16 @@ const phaseFormSchema = z.object({
   start_date: z.date().optional().nullable(),
   end_date: z.date().optional().nullable(),
   status: z.string().optional(),
+}).superRefine((values, ctx) => {
+  // The end-date picker blocks earlier days, but the range can still be inverted by
+  // picking the end first and moving the start forward afterwards.
+  if (values.start_date && values.end_date && values.end_date < values.start_date) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["end_date"],
+      message: "End date must be on or after the start date",
+    });
+  }
 });
 
 type PhaseFormValues = z.infer<typeof phaseFormSchema>;
@@ -183,7 +193,11 @@ export const PhaseForm = ({ projectId, initialData, onSuccess }: PhaseFormProps)
                     <Calendar
                       mode="single"
                       selected={field.value || undefined}
-                      onSelect={field.onChange}
+                      onSelect={(date) => {
+                        field.onChange(date);
+                        // Re-check the range so an already picked end date flags immediately.
+                        form.trigger("end_date");
+                      }}
                       disabled={(date) =>
                         date < new Date("1900-01-01")
                       }

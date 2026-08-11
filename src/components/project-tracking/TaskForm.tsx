@@ -40,20 +40,28 @@ const taskFormSchema = z.object({
 
 type TaskFormValues = z.infer<typeof taskFormSchema>;
 
-// A new task must belong to a phase. Editing keeps the plain schema so tasks that are already
-// unassigned stay editable instead of being locked until a phase is picked.
+// A new task must belong to a phase. Editing skips that rule so tasks that are already
+// unassigned stay editable instead of being locked until a phase is picked. The date-range
+// rule applies to both: the due-date picker blocks earlier days, but the range can still be
+// inverted by picking the due date first and moving the start date forward afterwards.
 const buildTaskFormSchema = (requirePhase: boolean) =>
-  requirePhase
-    ? taskFormSchema.superRefine((values, ctx) => {
-        if (!values.phase_id) {
-          ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            path: ["phase_id"],
-            message: "Phase is required",
-          });
-        }
-      })
-    : taskFormSchema;
+  taskFormSchema.superRefine((values, ctx) => {
+    if (requirePhase && !values.phase_id) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["phase_id"],
+        message: "Phase is required",
+      });
+    }
+
+    if (values.start_date && values.due_date && values.due_date < values.start_date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["due_date"],
+        message: "Due date must be on or after the start date",
+      });
+    }
+  });
 
 interface TaskFormProps {
   projectId: string;
@@ -312,7 +320,11 @@ export const TaskForm = ({ projectId, phases, initialData, onSuccess }: TaskForm
                     <Calendar
                       mode="single"
                       selected={field.value || undefined}
-                      onSelect={field.onChange}
+                      onSelect={(date) => {
+                        field.onChange(date);
+                        // Re-check the range so an already picked due date flags immediately.
+                        form.trigger("due_date");
+                      }}
                       disabled={(date) =>
                         date < new Date("1900-01-01")
                       }
