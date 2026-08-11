@@ -40,6 +40,21 @@ const taskFormSchema = z.object({
 
 type TaskFormValues = z.infer<typeof taskFormSchema>;
 
+// A new task must belong to a phase. Editing keeps the plain schema so tasks that are already
+// unassigned stay editable instead of being locked until a phase is picked.
+const buildTaskFormSchema = (requirePhase: boolean) =>
+  requirePhase
+    ? taskFormSchema.superRefine((values, ctx) => {
+        if (!values.phase_id) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["phase_id"],
+            message: "Phase is required",
+          });
+        }
+      })
+    : taskFormSchema;
+
 interface TaskFormProps {
   projectId: string;
   phases: ProjectPhase[];
@@ -65,8 +80,10 @@ export const TaskForm = ({ projectId, phases, initialData, onSuccess }: TaskForm
     due_date: initialData?.dueDate ? parseISO(initialData.dueDate) : null,
   };
 
+  const isEditing = Boolean(initialData?.id);
+
   const form = useForm<TaskFormValues>({
-    resolver: zodResolver(taskFormSchema),
+    resolver: zodResolver(buildTaskFormSchema(!isEditing)),
     defaultValues,
   });
 
@@ -232,14 +249,16 @@ export const TaskForm = ({ projectId, phases, initialData, onSuccess }: TaskForm
           name="phase_id"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Phase</FormLabel>
+              <FormLabel>Phase{!isEditing && " *"}</FormLabel>
               <FormControl>
                 <select
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   {...field}
                   value={field.value || ""}
                 >
-                  <option value="">Unassigned</option>
+                  <option value="">
+                    {isEditing ? "Unassigned" : "Select a phase..."}
+                  </option>
                   {phases.map((phase) => (
                     <option key={phase.id} value={phase.id}>
                       {phase.name}
@@ -248,7 +267,11 @@ export const TaskForm = ({ projectId, phases, initialData, onSuccess }: TaskForm
                 </select>
               </FormControl>
               <FormDescription>
-                Assign this task to a project phase
+                {isEditing
+                  ? "Assign this task to a project phase"
+                  : phases.length === 0
+                    ? "This project has no work areas yet — create one before adding tasks"
+                    : "Every task must belong to a phase"}
               </FormDescription>
               <FormMessage />
             </FormItem>
