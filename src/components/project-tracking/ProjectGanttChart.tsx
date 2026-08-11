@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import type { ProjectPhase, ProjectTask } from '@/types/api';
-import { canEditProjects } from '@/constants';
+import { canEditProjects, TaskStatus } from '@/constants';
 
 // Bounds for the timeline window, in days. Zooming scales the window by ZOOM_STEP.
 const MIN_VISIBLE_DAYS = 7;
@@ -120,6 +120,23 @@ export const ProjectGanttChart = ({
       if (!bStart) return -1;
       return new Date(aStart).getTime() - new Date(bStart).getTime();
     });
+  };
+
+  // Share of the phase's tasks that are completed. Returns null when the phase has no tasks,
+  // since 0/0 has no meaningful percentage to show.
+  const getPhaseProgress = (phaseId: string) => {
+    const phaseTasks = getTasksByPhase(phaseId);
+    if (phaseTasks.length === 0) return null;
+
+    const completed = phaseTasks.filter(
+      task => (task.status || '').toUpperCase() === TaskStatus.COMPLETED
+    ).length;
+
+    return {
+      completed,
+      total: phaseTasks.length,
+      percent: Math.round((completed / phaseTasks.length) * 100),
+    };
   };
 
   // Tasks that are not attached to any phase — render in a dedicated "Unassigned" row
@@ -241,18 +258,38 @@ export const ProjectGanttChart = ({
 
   const calculateItemPosition = (
     startDate: string | null | undefined,
-    endDate: string | null | undefined
+    endDate: string | null | undefined,
+    // Range the item may not paint outside of. Tasks pass their phase's dates here so a task
+    // whose own dates run past the phase stays contained within the phase's band.
+    bounds?: { start: string | null | undefined; end: string | null | undefined }
   ) => {
     if (!startDate || !visibleStartDate || !visibleEndDate || !dates.length) {
       return HIDDEN_ITEM;
     }
 
     try {
-      const start = parseDateString(startDate);
-      const end = endDate ? parseDateString(endDate) : (start ? addDays(start, 1) : null);
+      let start = parseDateString(startDate);
+      let end = endDate ? parseDateString(endDate) : (start ? addDays(start, 1) : null);
 
       if (!start || !end) {
         return HIDDEN_ITEM;
+      }
+
+      let clampedByBounds = false;
+      if (bounds) {
+        const boundStart = parseDateString(bounds.start);
+        const boundEnd = parseDateString(bounds.end);
+
+        if (boundStart && isBefore(start, boundStart)) start = boundStart;
+        if (boundEnd && isAfter(end, boundEnd)) {
+          end = boundEnd;
+          clampedByBounds = true;
+        }
+
+        // Clamping crossed the edges over each other: the item lies fully outside its bounds.
+        if (isAfter(start, end)) {
+          return HIDDEN_ITEM;
+        }
       }
 
       const totalDays = differenceInDays(visibleEndDate, visibleStartDate) || 1;
@@ -275,7 +312,8 @@ export const ProjectGanttChart = ({
         visible: true,
         left: (clippedStart / totalDays) * 100,
         width: ((clippedEnd - clippedStart) / totalDays) * 100,
-        continuesAfter: endOffset > totalDays
+        // Dots mark a bar cut short, whether by the visible window or by its phase's end.
+        continuesAfter: endOffset > totalDays || clampedByBounds
       };
     } catch (error) {
       return HIDDEN_ITEM;
@@ -441,7 +479,9 @@ export const ProjectGanttChart = ({
                 No phases yet. Click "Add Work Area" to create one.
               </div>
             ) : (
-              sortedPhases.map((phase) => (
+              sortedPhases.map((phase) => {
+                const progress = getPhaseProgress(phase.id);
+                return (
                 <div key={phase.id}>
                   <div
                     className="h-10 px-4 border-b font-medium cursor-pointer hover:bg-muted/50 flex justify-between items-center gap-2"
@@ -465,6 +505,14 @@ export const ProjectGanttChart = ({
                       </Button>
                       <span className="truncate">{phase.name}</span>
                     </div>
+                    {progress && (
+                      <span
+                        className="shrink-0 text-xs font-medium tabular-nums text-muted-foreground"
+                        title={`${progress.completed} of ${progress.total} tasks completed`}
+                      >
+                        {progress.percent}%
+                      </span>
+                    )}
                     {canEdit && (
                       <Button
                         variant="ghost"
@@ -486,7 +534,8 @@ export const ProjectGanttChart = ({
                     </div>
                   ))}
                 </div>
-              ))
+                );
+              })
             )}
 
             {unassignedTasks.length > 0 && (
@@ -576,7 +625,8 @@ export const ProjectGanttChart = ({
                     getTasksByPhase(phase.id).map((task) => {
                       const tsd = task.start_date || task.startDate;
                       const ted = task.due_date || task.dueDate;
-                      const taskPos = calculateItemPosition(tsd, ted);
+                      // Constrained to the phase's own range: a task never paints outside it.
+                      const taskPos = calculateItemPosition(tsd, ted, { start: psd, end: ped });
                       return (
                       <div key={task.id} className="relative h-10 border-b">
                         {tsd && ted && taskPos.visible && (
