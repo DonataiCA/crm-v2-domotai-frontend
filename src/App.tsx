@@ -33,6 +33,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { isClientRole, isViewerRole } from "@/constants";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,14 +59,14 @@ const NavToAuth = () => {
 /** Guard: redirects clients and viewers away from team-only pages */
 const TeamOnly = ({ children }: { children: React.ReactNode }) => {
   const { userRole } = useAuth();
-  if (userRole?.toLowerCase() === 'client') return <Navigate to="/project-dashboard" replace />;
-  if (userRole?.toLowerCase() === 'viewer') return <Navigate to="/" replace />;
+  if (isClientRole(userRole)) return <Navigate to="/project-dashboard" replace />;
+  if (isViewerRole(userRole)) return <Navigate to="/" replace />;
   return <>{children}</>;
 };
 
 const AppRoutes = () => {
   const { session, userRole, isLoading } = useAuth();
-  const isClient = userRole?.toLowerCase() === 'client';
+  const isClient = isClientRole(userRole);
 
   if (isLoading) {
     return (

@@ -42,7 +42,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import type { ProjectPhase, ProjectTask, Tag } from '@/types/api';
-import { TASK_STATUS_OPTIONS, canEditProjects, getPriorityBgColor } from '@/constants';
+import { TASK_STATUS_OPTIONS, canEditProjects, getPriorityBgColor, isClientRole } from '@/constants';
 
 interface ProjectKanbanBoardProps {
   projectId: string;
@@ -107,8 +107,8 @@ export const ProjectKanbanBoard = ({
     queryFn: tagService.getAll,
   });
 
-  const isTeam = userRole ? canEditProjects(userRole) : false;
-  const isClient = userRole?.toLowerCase() === 'client';
+  const isTeam = canEditProjects(userRole);
+  const isClient = isClientRole(userRole);
   const canEdit = isTeam || isClient;
 
   const statusColumns = TASK_STATUS_OPTIONS.map(opt => ({ id: opt.value, label: opt.label }));

@@ -32,6 +32,7 @@ import { OrganizationSelector } from "@/components/organizations/OrganizationSel
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChangePasswordForm } from "@/components/auth/ChangePasswordForm";
+import { UserRole, isClientRole, isViewerRole, normalizeRole } from "@/constants";
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
 
@@ -71,9 +72,9 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
   const navigate = useNavigate();
   const { userEmail, userRole, signOut } = useAuth();
 
-  const isClient = userRole?.toLowerCase() === 'client';
-  const isViewer = userRole?.toLowerCase() === 'viewer';
-  const isFreelancer = userRole?.toLowerCase() === 'freelancer';
+  const isClient = isClientRole(userRole);
+  const isViewer = isViewerRole(userRole);
+  const isFreelancer = normalizeRole(userRole) === UserRole.FREELANCER;
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";

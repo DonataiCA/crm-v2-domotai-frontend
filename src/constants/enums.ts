@@ -71,27 +71,68 @@ export function getLeadStageLabel(stage: string): string {
 }
 
 // ─── User Roles ─────────────────────────────────────────────────────────────
+// La forma canónica es minúscula: es la que guarda Profile.role en la base.
+// Los predicados normalizan internamente para que ninguna pantalla tenga que
+// acordarse de hacerlo — de ahí venían las comparaciones divergentes.
 
 export const UserRole = {
-  ADMIN: 'ADMIN',
-  SALESMAN: 'SALESMAN',
-  FREELANCER: 'FREELANCER',
+  ADMIN: 'admin',
+  SALESMAN: 'salesman',
+  FREELANCER: 'freelancer',
+  CLIENT: 'client',
+  VIEWER: 'viewer',
 } as const;
 
 export type UserRoleType = (typeof UserRole)[keyof typeof UserRole];
 
-export function getUserRoleLabel(role: string): string {
-  const labels: Record<string, string> = {
-    ADMIN: 'Admin',
-    SALESMAN: 'Salesman',
-    FREELANCER: 'Freelancer',
-  };
-  return labels[role.toUpperCase()] ?? role;
+export const USER_ROLE_OPTIONS: Array<{ value: UserRoleType; label: string }> = [
+  { value: UserRole.ADMIN, label: 'Admin' },
+  { value: UserRole.SALESMAN, label: 'Salesman' },
+  { value: UserRole.FREELANCER, label: 'Freelancer' },
+  { value: UserRole.CLIENT, label: 'Client' },
+  { value: UserRole.VIEWER, label: 'Viewer' },
+];
+
+/** Roles internos: los que operan el CRM, por oposición a client y viewer. */
+export const TEAM_ROLES: UserRoleType[] = [
+  UserRole.ADMIN,
+  UserRole.SALESMAN,
+  UserRole.FREELANCER,
+];
+
+/**
+ * Lleva cualquier variante a la forma canónica: "Admin", " ADMIN " y "admin"
+ * colapsan en "admin". Devuelve '' para valores vacíos.
+ */
+export function normalizeRole(role: string | null | undefined): string {
+  if (!role) return '';
+  return String(role).trim().toLowerCase().replace(/[\s-]+/g, '_');
 }
 
-export function canEditProjects(role: string): boolean {
-  const upper = role.toUpperCase();
-  return upper === UserRole.ADMIN || upper === UserRole.SALESMAN || upper === UserRole.FREELANCER;
+export function getUserRoleLabel(role: string): string {
+  const normalized = normalizeRole(role);
+  return USER_ROLE_OPTIONS.find((r) => r.value === normalized)?.label ?? role;
+}
+
+export function isAdminRole(role: string | null | undefined): boolean {
+  return normalizeRole(role) === UserRole.ADMIN;
+}
+
+export function isClientRole(role: string | null | undefined): boolean {
+  return normalizeRole(role) === UserRole.CLIENT;
+}
+
+export function isViewerRole(role: string | null | undefined): boolean {
+  return normalizeRole(role) === UserRole.VIEWER;
+}
+
+/** true para admin, salesman y freelancer. */
+export function isTeamMemberRole(role: string | null | undefined): boolean {
+  return (TEAM_ROLES as string[]).includes(normalizeRole(role));
+}
+
+export function canEditProjects(role: string | null | undefined): boolean {
+  return isTeamMemberRole(role);
 }
 
 // ─── Organization Roles ─────────────────────────────────────────────────────
@@ -99,6 +140,7 @@ export function canEditProjects(role: string): boolean {
 export const OrgRole = {
   ADMIN: 'admin',
   MEMBER: 'member',
+  CLIENT: 'client',
 } as const;
 
 export type OrgRoleType = (typeof OrgRole)[keyof typeof OrgRole];

@@ -8,6 +8,7 @@ import { Sidebar, useSidebarState } from "./Sidebar";
 import { CommercialAgent } from "@/components/ai/CommercialAgent";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "react-router-dom";
+import { isClientRole } from "@/constants";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -19,7 +20,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { userRole } = useAuth();
   const location = useLocation();
   // Only show the AI agent for internal team members, not clients
-  const isTeamMember = userRole && userRole !== 'CLIENT';
+  const isTeamMember = Boolean(userRole) && !isClientRole(userRole);
   // Hide CommercialAgent on project tracking pages — those pages have their own AI chat
   const isProjectTracking = location.pathname.includes('/tracking');
 

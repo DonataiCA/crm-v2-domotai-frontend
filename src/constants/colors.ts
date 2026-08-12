@@ -1,4 +1,4 @@
-import { TaskPriority, TaskStatus, LeadStage, UserRole } from './enums';
+import { TaskPriority, TaskStatus, LeadStage, UserRole, normalizeRole } from './enums';
 
 // ─── Task Priority Colors ───────────────────────────────────────────────────
 
@@ -67,5 +67,5 @@ const ROLE_COLORS: Record<string, string> = {
 };
 
 export function getUserRoleBgColor(role: string): string {
-  return ROLE_COLORS[role.toUpperCase()] ?? 'bg-gray-500 hover:bg-gray-600';
+  return ROLE_COLORS[normalizeRole(role)] ?? 'bg-gray-500 hover:bg-gray-600';
 }

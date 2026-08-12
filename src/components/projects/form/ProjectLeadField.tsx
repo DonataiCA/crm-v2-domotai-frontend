@@ -6,6 +6,7 @@ import { useOrganization } from "@/contexts/OrganizationContext";
 import { organizationService } from "@/services/organization.service";
 import { ProjectFormValues } from "./types";
 import { UserCog } from "lucide-react";
+import { isTeamMemberRole } from "@/constants";
 
 interface ProjectLeadFieldProps {
   form: UseFormReturn<ProjectFormValues>;
@@ -25,10 +26,7 @@ export const ProjectLeadField = ({ form }: ProjectLeadFieldProps) => {
     { value: "__none__", label: "Unassigned" },
     ...members
       .filter((m: any) => m.user)
-      .filter((m: any) => {
-        const role = (m.user.role || m.role || "").toLowerCase();
-        return role === "admin" || role === "salesman" || role === "freelancer";
-      })
+      .filter((m: any) => isTeamMemberRole(m.user.role || m.role))
       .map((m: any) => ({
         value: m.user.id,
         label: `${m.user.fullName || m.user.email}${m.user.role ? ` · ${m.user.role}` : ""}`,
