@@ -585,6 +585,29 @@ export interface AIGenerateTasksResponse {
   tasks: ProjectTask[];
 }
 
+// ─── Importación de tareas por plantilla ────────────────────────────────────
+
+/**
+ * Un problema concreto del archivo subido, con la línea donde está. El backend los
+ * devuelve todos de una vez —no sólo el primero— para que se pueda corregir el archivo
+ * de una sola pasada.
+ */
+export interface TemplateIssue {
+  line: number;
+  taskTitle?: string;
+  message: string;
+}
+
+/**
+ * Respuesta de `POST /projects/:id/import-tasks`. Es todo o nada: con `issues` no vacío
+ * llega como 422 y `created` es 0.
+ */
+export interface ImportTasksResponse {
+  created: number;
+  tasks: ProjectTask[];
+  issues: TemplateIssue[];
+}
+
 // ─── Calendar Event ─────────────────────────────────────────────────────────
 
 export interface CalendarEvent {

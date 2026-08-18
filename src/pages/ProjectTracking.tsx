@@ -8,12 +8,12 @@ import { projectService } from "@/services/project.service";
 import { githubService } from "@/services/github.service";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, ArrowLeft, AlertCircle, Bot, MessageSquare, X, FileText, Share2 } from "lucide-react";
+import { Loader2, ArrowLeft, AlertCircle, Bot, Upload, X, FileText, Share2 } from "lucide-react";
 import { ProjectKanbanBoard } from "@/components/project-tracking/ProjectKanbanBoard";
 import { ProjectGanttChart } from "@/components/project-tracking/ProjectGanttChart";
 import { ProjectPRDPanel } from "@/components/project-tracking/ProjectPRDPanel";
 import { aiService } from "@/services/ai.service";
-import { TaskChat } from "@/components/project-tracking/TaskChat";
+import { TaskFileImport } from "@/components/project-tracking/TaskFileImport";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ShareProjectDialog } from "@/components/projects/ShareProjectDialog";
 import { ProjectReposManager } from "@/components/projects/ProjectReposManager";
@@ -37,7 +37,7 @@ const ProjectTracking = () => {
   const [isLoadingGit, setIsLoadingGit] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("kanban");
-  const [chatOpen, setChatOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [isGeneratingFromPrd, setIsGeneratingFromPrd] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
 
@@ -314,33 +314,33 @@ const ProjectTracking = () => {
           </TabsContent>
         </Tabs>
 
-      {/* Chat Panel — slide-in from right */}
-      {chatOpen && (
+      {/* Panel de importación — entra desde la derecha */}
+      {importOpen && (
         <div className="fixed top-0 right-0 h-full w-[400px] bg-card border-l shadow-xl z-40 flex flex-col">
           <div className="flex items-center justify-between p-3 border-b bg-muted/30">
             <div className="flex items-center gap-2">
-              <MessageSquare className="h-4 w-4 text-primary" />
-              <span className="font-semibold text-sm">Create Task via Chat</span>
+              <Upload className="h-4 w-4 text-primary" />
+              <span className="font-semibold text-sm">Importar tareas desde archivo</span>
             </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setChatOpen(false)}>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setImportOpen(false)}>
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <TaskChat
+          <TaskFileImport
             projectId={projectId || ''}
-            onTaskCreated={refreshTrackingData}
+            onTasksImported={refreshTrackingData}
           />
         </div>
       )}
 
-      {/* Floating AI Chat Button */}
-      {!chatOpen && !needsSetup && canEdit && (
+      {/* Botón flotante de importación */}
+      {!importOpen && !needsSetup && canEdit && (
         <Button
-          onClick={() => setChatOpen(true)}
+          onClick={() => setImportOpen(true)}
           className="fixed bottom-6 right-6 h-auto rounded-full shadow-lg z-40 px-4 py-3 gap-2"
         >
-          <Bot className="h-5 w-5" />
-          <span className="text-sm font-medium">AI Task</span>
+          <Upload className="h-5 w-5" />
+          <span className="text-sm font-medium">Importar tareas</span>
         </Button>
       )}
 

@@ -9,6 +9,7 @@ import {
   ProjectPhasePayload,
   PaginatedResponse,
   TaskComment,
+  ImportTasksResponse,
 } from '@/types/api';
 
 export const projectService = {
@@ -100,6 +101,25 @@ export const projectService = {
 
   deleteProjectTask: async (taskId: string): Promise<void> => {
     await api.delete(`/projects/project-tasks/${taskId}`);
+  },
+
+  /**
+   * Alta de tareas desde la plantilla Markdown. El archivo se lee en el navegador
+   * (`readAttachment`) y viaja como texto: no se sube a ningún sitio.
+   *
+   * El backend responde 422 con `{ issues }` cuando algo del archivo no se entiende, y no
+   * crea nada en ese caso. Ese 422 **no es un fallo de red**: lo captura el panel y lo
+   * pinta como una lista de problemas con su línea, así que aquí se deja pasar tal cual.
+   */
+  importTasks: async (
+    projectId: string,
+    document: { fileName: string; content: string },
+  ): Promise<ImportTasksResponse> => {
+    const { data } = await api.post<ImportTasksResponse>(
+      `/projects/${projectId}/import-tasks`,
+      { document },
+    );
+    return data;
   },
 
   // ─── Project Task Comments ─────────────────────────────────────────────

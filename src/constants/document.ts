@@ -26,3 +26,16 @@ export type AcceptedDocumentExtension = (typeof ACCEPTED_DOCUMENT_EXTENSIONS)[nu
 
 /** Valor del atributo `accept` del input de archivos. */
 export const DOCUMENT_ACCEPT_ATTRIBUTE = ACCEPTED_DOCUMENT_EXTENSIONS.join(',');
+
+/**
+ * Tope del archivo de plantilla que se sube en el panel de importación
+ * (`POST /projects/:projectId/import-tasks`).
+ *
+ * Es mucho más alto que `MAX_DOCUMENT_CHARS` porque este contenido **no entra en ningún
+ * prompt**: lo lee un parser del backend, no un modelo. El límite existe sólo para que un
+ * archivo absurdo no llegue hasta allí, y el que manda de verdad es `MAX_TEMPLATE_TASKS`.
+ */
+export const MAX_TEMPLATE_CHARS = 40000;
+
+/** Tope de tareas por archivo de plantilla. El límite es inclusivo. */
+export const MAX_TEMPLATE_TASKS = 100;

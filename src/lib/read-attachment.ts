@@ -29,12 +29,12 @@ export type ReadResult =
   | { ok: false; error: string };
 
 /**
- * Máximo de bytes que puede ocupar un contenido dentro del tope de caracteres. UTF-8
+ * Máximo de bytes que puede ocupar un contenido dentro de un tope de caracteres. UTF-8
  * gasta como mucho 4 bytes por caracter, así que un archivo más grande que esto no cabe
  * en el tope ni en el mejor de los casos y se puede descartar **sin leerlo**. Evita
  * cargar en memoria un archivo de decenas de megas para rechazarlo después.
  */
-const MAX_DOCUMENT_BYTES = MAX_DOCUMENT_CHARS * 4;
+const maxBytesFor = (maxChars: number) => maxChars * 4;
 
 const BOM = '﻿';
 
@@ -45,7 +45,16 @@ const extensionOf = (fileName: string): string => {
 
 const accepted = ACCEPTED_DOCUMENT_EXTENSIONS.join(' o ');
 
-export async function readAttachment(file: File): Promise<ReadResult> {
+/**
+ * `maxChars` es un parámetro y no una constante porque hay dos consumidores con topes muy
+ * distintos: el chat de tareas, cuyo contenido acaba dentro de un prompt de OpenAI
+ * (`MAX_DOCUMENT_CHARS`), y la importación por plantilla, que sólo lee un parser del
+ * backend (`MAX_TEMPLATE_CHARS`). El resto de la validación es idéntica en los dos.
+ */
+export async function readAttachment(
+  file: File,
+  maxChars: number = MAX_DOCUMENT_CHARS,
+): Promise<ReadResult> {
   const extension = extensionOf(file.name);
 
   const allowed: readonly string[] = ACCEPTED_DOCUMENT_EXTENSIONS;
@@ -59,10 +68,10 @@ export async function readAttachment(file: File): Promise<ReadResult> {
     };
   }
 
-  if (file.size > MAX_DOCUMENT_BYTES) {
+  if (file.size > maxBytesFor(maxChars)) {
     return {
       ok: false,
-      error: `El archivo es demasiado grande. El máximo son ${MAX_DOCUMENT_CHARS} caracteres.`,
+      error: `El archivo es demasiado grande. El máximo son ${maxChars} caracteres.`,
     };
   }
 
@@ -81,10 +90,10 @@ export async function readAttachment(file: File): Promise<ReadResult> {
 
   // El recuento se hace sobre el contenido ya limpio, que es exactamente lo que se
   // manda al backend y lo que él vuelve a medir.
-  if (content.length > MAX_DOCUMENT_CHARS) {
+  if (content.length > maxChars) {
     return {
       ok: false,
-      error: `El archivo tiene ${content.length} caracteres; el máximo son ${MAX_DOCUMENT_CHARS}.`,
+      error: `El archivo tiene ${content.length} caracteres; el máximo son ${maxChars}.`,
     };
   }
 

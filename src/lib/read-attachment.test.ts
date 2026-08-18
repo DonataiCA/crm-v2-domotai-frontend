@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { readAttachment } from './read-attachment';
-import { MAX_DOCUMENT_CHARS } from '@/constants/document';
+import { MAX_DOCUMENT_CHARS, MAX_TEMPLATE_CHARS } from '@/constants/document';
 
 /**
  * `readAttachment` es la única pieza con lógica del drag & drop: decide qué archivo se
@@ -116,5 +116,35 @@ describe('readAttachment — contenido', () => {
         const result = await readAttachment(file('﻿hola'));
 
         expect(result.ok && result.attachment.characters).toBe(4);
+    });
+});
+
+/**
+ * La importación por plantilla usa el mismo lector con otro tope: su contenido no entra
+ * en ningún prompt, así que cabe mucho más. Si el parámetro dejara de respetarse, el
+ * navegador rechazaría plantillas que el backend acepta sin problema.
+ */
+describe('readAttachment — tope de caracteres configurable', () => {
+    it('acepta un contenido que supera el tope del chat cuando se le pasa uno mayor', async () => {
+        const content = 'a'.repeat(MAX_DOCUMENT_CHARS + 1);
+
+        expect((await readAttachment(file(content))).ok).toBe(false);
+        expect((await readAttachment(file(content), MAX_TEMPLATE_CHARS)).ok).toBe(true);
+    });
+
+    it('sigue rechazando lo que pasa del tope que se le pasa, y lo dice en el error', async () => {
+        const result = await readAttachment(file('a'.repeat(51)), 50);
+
+        expect(result.ok).toBe(false);
+        expect(!result.ok && result.error).toContain('51');
+        expect(!result.ok && result.error).toContain('50');
+    });
+
+    it('acepta justo el tope que se le pasa', async () => {
+        expect((await readAttachment(file('a'.repeat(50)), 50)).ok).toBe(true);
+    });
+
+    it('usa el tope del chat cuando no se le pasa ninguno', async () => {
+        expect((await readAttachment(file('a'.repeat(MAX_DOCUMENT_CHARS)))).ok).toBe(true);
     });
 });
