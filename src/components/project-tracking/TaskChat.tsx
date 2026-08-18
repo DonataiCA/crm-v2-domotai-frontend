@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import api from "@/lib/api-client";
+import { readAttachment, type Attachment } from "@/lib/read-attachment";
+import { ACCEPTED_DOCUMENT_EXTENSIONS } from "@/constants/document";
 import {
   Send,
   Loader2,
@@ -14,8 +16,19 @@ import {
   Layers,
   Calendar,
   Flag,
+  FileText,
+  Upload,
+  X,
+  AlertCircle,
 } from "lucide-react";
 import type { ProjectTask } from "@/types/api";
+
+/**
+ * El chat corriente responde en segundos, pero interpretar un documento entero puede
+ * tardar bastante más. El axios global corta a los 30 s (`api-client.ts`), así que esta
+ * petición —y sólo esta— pide más margen.
+ */
+const CHAT_TASK_TIMEOUT_MS = 120_000;
 
 type TaskWithPhase = ProjectTask & { phase?: { id: string; name: string } | null };
 
@@ -34,6 +47,8 @@ interface ChatMessage {
   results?: ChatResult[];
   createdCount?: number;
   updatedCount?: number;
+  /** Nombre del archivo que acompañaba al mensaje, para que el historial se entienda. */
+  attachmentName?: string;
 }
 
 interface TaskChatProps {
@@ -47,11 +62,14 @@ export const TaskChat = ({ projectId, onTaskCreated }: TaskChatProps) => {
       id: "welcome",
       role: "assistant",
       content:
-        'Describe lo que necesitas en lenguaje natural. Puedo:\n\n• **Crear tareas**: "Crear endpoint de login con JWT y bcrypt"\n• **Asignar**: "Asigna las tareas en TODO a David Altuve"\n• **Cambiar prioridad**: "Sube a urgente la tarea de la API de pagos"\n• **Cambiar estado**: "Marca como completada la tarea de diseño del dashboard"\n• **Mover de fase**: "Mueve la tarea de tests al área de QA"',
+        'Describe lo que necesitas en lenguaje natural. Puedo:\n\n• **Crear tareas**: "Crear endpoint de login con JWT y bcrypt"\n• **Asignar**: "Asigna las tareas en TODO a David Altuve"\n• **Cambiar prioridad**: "Sube a urgente la tarea de la API de pagos"\n• **Cambiar estado**: "Marca como completada la tarea de diseño del dashboard"\n• **Mover de fase**: "Mueve la tarea de tests al área de QA"\n\nTambién puedes arrastrar aquí un archivo .md o .txt y sacar las tareas de su contenido.',
     },
   ]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [attachment, setAttachment] = useState<Attachment | null>(null);
+  const [attachError, setAttachError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const { toast } = useToast();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -67,23 +85,81 @@ export const TaskChat = ({ projectId, onTaskCreated }: TaskChatProps) => {
     return parts.length > 0 ? parts.join(" · ") : "Sin cambios";
   };
 
+  const clearAttachment = () => {
+    setAttachment(null);
+    setAttachError(null);
+  };
+
+  /**
+   * `preventDefault` en todos los eventos de arrastre: sin él el navegador abre el
+   * archivo en la pestaña y se pierde la sesión del CRM.
+   */
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (!isLoading) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    // Sin esta comprobación el overlay parpadea al pasar por encima de los hijos del
+    // panel, porque `dragleave` también se dispara al entrar en cada uno de ellos.
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (isLoading) return;
+
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length === 0) return;
+    if (files.length > 1) {
+      setAttachment(null);
+      setAttachError("Sólo se puede adjuntar un archivo a la vez.");
+      return;
+    }
+
+    const result = await readAttachment(files[0]);
+    if (!result.ok) {
+      setAttachment(null);
+      setAttachError(result.error);
+      return;
+    }
+
+    setAttachment(result.attachment);
+    setAttachError(null);
+    inputRef.current?.focus();
+  };
+
   const handleSend = async () => {
     const text = input.trim();
-    if (!text || isLoading) return;
+    // Con un documento adjunto no hace falta escribir nada: el archivo es la petición.
+    if ((!text && !attachment) || isLoading) return;
 
+    const sentAttachment = attachment;
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
       content: text,
+      attachmentName: sentAttachment?.fileName,
     };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
+    clearAttachment();
     setIsLoading(true);
 
     try {
-      const { data } = await api.post(`/projects/${projectId}/chat-task`, {
-        message: text,
-      });
+      const { data } = await api.post(
+        `/projects/${projectId}/chat-task`,
+        {
+          message: text,
+          document: sentAttachment
+            ? { fileName: sentAttachment.fileName, content: sentAttachment.content }
+            : undefined,
+        },
+        { timeout: CHAT_TASK_TIMEOUT_MS },
+      );
 
       // New shape: { results, createdCount, updatedCount, count }
       // Legacy shape: { task, tasks, count } — synthesize results from it
@@ -155,7 +231,23 @@ export const TaskChat = ({ projectId, onTaskCreated }: TaskChatProps) => {
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div
+      className="flex flex-col h-full relative"
+      onDragOver={handleDragOver}
+      onDragEnter={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {isDragging && (
+        <div className="absolute inset-2 z-10 rounded-lg border-2 border-dashed border-primary bg-primary/10 backdrop-blur-[1px] flex flex-col items-center justify-center gap-2 pointer-events-none">
+          <Upload className="h-6 w-6 text-primary" />
+          <p className="text-sm font-medium text-primary">Suelta el archivo aquí</p>
+          <p className="text-xs text-muted-foreground">
+            {ACCEPTED_DOCUMENT_EXTENSIONS.join(" o ")}
+          </p>
+        </div>
+      )}
+
       {/* Messages */}
       <div className="flex-1 overflow-y-auto space-y-3 p-4">
         {messages.map((msg) => (
@@ -243,7 +335,15 @@ export const TaskChat = ({ projectId, onTaskCreated }: TaskChatProps) => {
                   })}
                 </div>
               ) : (
-                <p className="whitespace-pre-line">{msg.content}</p>
+                <div className="space-y-1.5">
+                  {msg.content && <p className="whitespace-pre-line">{msg.content}</p>}
+                  {msg.attachmentName && (
+                    <div className="flex items-center gap-1.5 text-xs opacity-90">
+                      <FileText className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{msg.attachmentName}</span>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
 
@@ -269,11 +369,49 @@ export const TaskChat = ({ projectId, onTaskCreated }: TaskChatProps) => {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Adjunto y su error — en el panel y no como toast: el toast dura unos segundos
+          y desaparece, y un error de validación tiene que quedarse mientras se corrige. */}
+      {(attachment || attachError) && (
+        <div className="border-t px-3 pt-2.5">
+          {attachment && (
+            <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-2.5 py-1.5">
+              <FileText className="h-3.5 w-3.5 text-primary shrink-0" />
+              <span className="text-xs font-medium truncate flex-1">
+                {attachment.fileName}
+              </span>
+              <span className="text-[10px] text-muted-foreground shrink-0">
+                {attachment.characters} car.
+              </span>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 shrink-0"
+                onClick={clearAttachment}
+                disabled={isLoading}
+                aria-label="Quitar el archivo adjunto"
+              >
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
+          {attachError && (
+            <div className="flex items-start gap-1.5 text-xs text-destructive mt-1.5">
+              <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-px" />
+              <span>{attachError}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Input */}
-      <div className="border-t p-3 flex gap-2">
+      <div className={`p-3 flex gap-2 ${attachment || attachError ? "" : "border-t"}`}>
         <Input
           ref={inputRef}
-          placeholder="Crear, asignar, cambiar prioridad..."
+          placeholder={
+            attachment
+              ? "Instrucción opcional sobre el documento..."
+              : "Crear, asignar, cambiar prioridad..."
+          }
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
@@ -282,7 +420,7 @@ export const TaskChat = ({ projectId, onTaskCreated }: TaskChatProps) => {
         />
         <Button
           onClick={handleSend}
-          disabled={!input.trim() || isLoading}
+          disabled={(!input.trim() && !attachment) || isLoading}
           size="sm"
           className="h-9 px-3"
         >
