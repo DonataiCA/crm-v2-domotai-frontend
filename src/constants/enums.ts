@@ -1,3 +1,13 @@
+/**
+ * Forma canónica de un valor de catálogo en MAYÚSCULA_SNAKE: "In Progress",
+ * "in-progress" e "IN_PROGRESS" colapsan en el mismo valor. Espejo de
+ * `canonicalize` en el backend. Los roles tienen el suyo (`normalizeRole`)
+ * porque su forma canónica es minúscula, no mayúscula.
+ */
+function canonicalizeEnumValue(value: string): string {
+  return String(value).trim().toUpperCase().replace(/[\s-]+/g, '_');
+}
+
 // ─── Task Status ────────────────────────────────────────────────────────────
 
 export const TaskStatus = {
@@ -16,8 +26,33 @@ export const TASK_STATUS_OPTIONS: Array<{ value: TaskStatusType; label: string }
   { value: TaskStatus.COMPLETED, label: 'Completed' },
 ];
 
-export function getTaskStatusLabel(status: string): string {
-  return TASK_STATUS_OPTIONS.find((s) => s.value === status)?.label ?? status;
+/**
+ * Variantes históricas que la base todavía puede contener. Espejo de
+ * `TASK_STATUS_ALIASES` en el backend.
+ */
+const TASK_STATUS_ALIASES: Record<string, TaskStatusType> = {
+  DONE: TaskStatus.COMPLETED,
+  COMPLETE: TaskStatus.COMPLETED,
+  PENDING: TaskStatus.TODO,
+  NOT_STARTED: TaskStatus.TODO,
+  IN_REVIEW: TaskStatus.IN_PROGRESS,
+  BLOCKED: TaskStatus.ON_HOLD,
+  PAUSED: TaskStatus.ON_HOLD,
+};
+
+/** Lleva cualquier grafía al valor canónico, o null si no la reconoce. */
+export function normalizeTaskStatus(status: string | null | undefined): TaskStatusType | null {
+  if (!status) return null;
+  const canonical = canonicalizeEnumValue(status);
+  if (TASK_STATUS_OPTIONS.some((o) => o.value === canonical)) return canonical as TaskStatusType;
+  return TASK_STATUS_ALIASES[canonical] ?? null;
+}
+
+export function getTaskStatusLabel(status: string | null | undefined): string {
+  const canonical = normalizeTaskStatus(status);
+  return canonical
+    ? TASK_STATUS_OPTIONS.find((s) => s.value === canonical)!.label
+    : (status ?? '');
 }
 
 // ─── Task Priority ──────────────────────────────────────────────────────────
@@ -38,36 +73,57 @@ export const TASK_PRIORITY_OPTIONS: Array<{ value: TaskPriorityType; label: stri
   { value: TaskPriority.URGENT, label: 'Urgent' },
 ];
 
-export function getTaskPriorityLabel(priority: string): string {
-  return TASK_PRIORITY_OPTIONS.find((p) => p.value === priority)?.label ?? priority;
+/** Lleva cualquier grafía al valor canónico, o null si no la reconoce. */
+export function normalizeTaskPriority(priority: string | null | undefined): TaskPriorityType | null {
+  if (!priority) return null;
+  const canonical = canonicalizeEnumValue(priority);
+  return TASK_PRIORITY_OPTIONS.some((o) => o.value === canonical)
+    ? (canonical as TaskPriorityType)
+    : null;
+}
+
+export function getTaskPriorityLabel(priority: string | null | undefined): string {
+  const canonical = normalizeTaskPriority(priority);
+  return canonical
+    ? TASK_PRIORITY_OPTIONS.find((p) => p.value === canonical)!.label
+    : (priority ?? '');
 }
 
 // ─── Lead Stages ────────────────────────────────────────────────────────────
+// Aquí NO hay catálogo de etapas: son filas de `pipeline_stages`, configurables
+// por organización, y cada pipeline tiene las suyas. El catálogo estático que
+// vivía aquí era la causa de que el tablero y el dashboard contaran distinto.
+//
+// `Lead.stage` guarda el **slug** de la etapa (`negociacion`), que es lo que
+// exige el backend (`^[a-z0-9_]+$`) y la restricción `leads_stage_slug_check`.
+// El nombre visible y la categoría se resuelven contra `lead.pipeline.stages`,
+// que el backend incluye en el payload justo para esto.
 
-export const LeadStage = {
-  NEW: 'new',
-  CONTACT_ESTABLISHED: 'contact_established',
-  FIRST_MEETING: 'first_meeting',
-  NEGOTIATING: 'negotiating',
-  CLOSED_WON: 'closed_won',
-  CLOSED_LOST: 'closed_lost',
-  ON_HOLD: 'on_hold',
+/** Categorías de etapa que el backend expone en `PipelineStage.category`. */
+export const StageCategory = {
+  STANDARD: 'standard',
+  WON: 'won',
+  LOST: 'lost',
 } as const;
 
-export type LeadStageType = (typeof LeadStage)[keyof typeof LeadStage];
+export type StageCategoryType = (typeof StageCategory)[keyof typeof StageCategory];
 
-export const LEAD_STAGE_OPTIONS: Array<{ value: LeadStageType; label: string }> = [
-  { value: LeadStage.NEW, label: 'New' },
-  { value: LeadStage.CONTACT_ESTABLISHED, label: 'Contact Established' },
-  { value: LeadStage.FIRST_MEETING, label: 'First Meeting' },
-  { value: LeadStage.NEGOTIATING, label: 'Negotiating' },
-  { value: LeadStage.CLOSED_WON, label: 'Closed Won' },
-  { value: LeadStage.CLOSED_LOST, label: 'Closed Lost' },
-  { value: LeadStage.ON_HOLD, label: 'On Hold' },
-];
-
-export function getLeadStageLabel(stage: string): string {
-  return LEAD_STAGE_OPTIONS.find((s) => s.value === stage)?.label ?? stage;
+/**
+ * Convierte un nombre de etapa en el slug que se persiste. Espejo de
+ * `slugifyStage` en el backend: minúsculas, sin tildes y con `_` por separador.
+ * Sólo hace falta como red de seguridad cuando una etapa no trae `slug`.
+ */
+export function slugifyStage(name: string | null | undefined): string {
+  if (!name) return '';
+  return String(name)
+    .normalize('NFD')
+    // \u0300-\u036f es el bloque de diacríticos combinantes que NFD separa
+    // de la letra base. Con escapes y no con los caracteres literales: son
+    // invisibles en el editor y se pierden al copiar.
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
 }
 
 // ─── User Roles ─────────────────────────────────────────────────────────────
@@ -146,22 +202,70 @@ export const OrgRole = {
 export type OrgRoleType = (typeof OrgRole)[keyof typeof OrgRole];
 
 // ─── Project Status ─────────────────────────────────────────────────────────
+// El valor que viaja y se guarda es MAYÚSCULA_SNAKE: es lo que hay en la base y
+// lo que exige `projects_status_check`. La grafía con espacios ("In Progress")
+// era el valor almacenado y por eso las comparaciones fallaban en silencio;
+// ahora es sólo etiqueta. El orden importa: un test de paridad en el backend lo
+// compara posición por posición con su propio catálogo.
 
 export const ProjectStatus = {
-  NOT_STARTED: 'Not Started',
-  IN_PROGRESS: 'In Progress',
-  ON_HOLD: 'On Hold',
-  COMPLETED: 'Completed',
+  NOT_STARTED: 'NOT_STARTED',
+  IN_PROGRESS: 'IN_PROGRESS',
+  ON_HOLD: 'ON_HOLD',
+  COMPLETED: 'COMPLETED',
+  ARCHIVED: 'ARCHIVED',
 } as const;
 
 export type ProjectStatusType = (typeof ProjectStatus)[keyof typeof ProjectStatus];
 
+const PROJECT_STATUS_LABELS: Record<ProjectStatusType, string> = {
+  [ProjectStatus.NOT_STARTED]: 'Not Started',
+  [ProjectStatus.IN_PROGRESS]: 'In Progress',
+  [ProjectStatus.ON_HOLD]: 'On Hold',
+  [ProjectStatus.COMPLETED]: 'Completed',
+  [ProjectStatus.ARCHIVED]: 'Archived',
+};
+
+/**
+ * Opciones seleccionables en un formulario. `ARCHIVED` queda fuera a propósito:
+ * archivar es una acción con su propio endpoint, no un estado que se elige de
+ * un desplegable.
+ */
 export const PROJECT_STATUS_OPTIONS: Array<{ value: ProjectStatusType; label: string }> = [
-  { value: ProjectStatus.NOT_STARTED, label: 'Not Started' },
-  { value: ProjectStatus.IN_PROGRESS, label: 'In Progress' },
-  { value: ProjectStatus.ON_HOLD, label: 'On Hold' },
-  { value: ProjectStatus.COMPLETED, label: 'Completed' },
+  { value: ProjectStatus.NOT_STARTED, label: PROJECT_STATUS_LABELS.NOT_STARTED },
+  { value: ProjectStatus.IN_PROGRESS, label: PROJECT_STATUS_LABELS.IN_PROGRESS },
+  { value: ProjectStatus.ON_HOLD, label: PROJECT_STATUS_LABELS.ON_HOLD },
+  { value: ProjectStatus.COMPLETED, label: PROJECT_STATUS_LABELS.COMPLETED },
 ];
+
+/**
+ * Lleva cualquier grafía histórica al valor canónico: "In Progress", "in-progress"
+ * y "IN_PROGRESS" colapsan en `IN_PROGRESS`. Espejo de `normalizeProjectStatus`
+ * en el backend, incluidos sus alias. Devuelve null si no reconoce el valor, para
+ * que quien llama decida el fallback en vez de inventarse un estado.
+ */
+export function normalizeProjectStatus(status: string | null | undefined): ProjectStatusType | null {
+  if (!status) return null;
+  const canonical = canonicalizeEnumValue(status);
+  if (canonical in PROJECT_STATUS_LABELS) return canonical as ProjectStatusType;
+  const aliases: Record<string, ProjectStatusType> = {
+    ACTIVE: ProjectStatus.IN_PROGRESS,
+    DONE: ProjectStatus.COMPLETED,
+    PAUSED: ProjectStatus.ON_HOLD,
+  };
+  return aliases[canonical] ?? null;
+}
+
+/** Etiqueta legible. Tolera grafías históricas y devuelve el valor tal cual si no lo reconoce. */
+export function getProjectStatusLabel(status: string | null | undefined): string {
+  const canonical = normalizeProjectStatus(status);
+  return canonical ? PROJECT_STATUS_LABELS[canonical] : (status ?? '');
+}
+
+/** true si el proyecto está en curso. Evita repetir la comparación en cada pantalla. */
+export function isProjectInProgress(status: string | null | undefined): boolean {
+  return normalizeProjectStatus(status) === ProjectStatus.IN_PROGRESS;
+}
 
 // ─── Pricing Types ──────────────────────────────────────────────────────────
 

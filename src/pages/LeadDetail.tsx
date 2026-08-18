@@ -12,6 +12,7 @@ import { EntityFileSection } from "@/components/entities/EntityFileSection";
 import { LeadForm } from "@/components/leads/LeadForm";
 import { useToast } from "@/hooks/use-toast";
 import { getLeadStageBadgeVariant } from "@/constants";
+import { stageLabel, stageCategory } from "@/lib/lead-stage";
 import {
   ArrowLeft,
   DollarSign,
@@ -65,13 +66,7 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
   );
 }
 
-function formatStage(stage: string | null) {
-  if (!stage) return "Unknown";
-  return stage
-    .split("_")
-    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-    .join(" ");
-}
+
 
 const LeadDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -146,8 +141,11 @@ const LeadDetail = () => {
         </div>
         <div className="flex items-center gap-2">
           {lead.stage && (
-            <Badge variant={getLeadStageBadgeVariant(lead.stage) as any} className="text-sm px-3 py-1">
-              {formatStage(lead.stage)}
+            <Badge
+              variant={getLeadStageBadgeVariant(stageCategory(lead.pipeline?.stages, lead.stage)) as any}
+              className="text-sm px-3 py-1"
+            >
+              {stageLabel(lead.pipeline?.stages, lead.stage)}
             </Badge>
           )}
           <Button
@@ -284,7 +282,7 @@ const LeadDetail = () => {
             <StatCard
               icon={<TrendingUp className="h-4 w-4" />}
               label="Stage"
-              value={formatStage(lead.stage)}
+              value={stageLabel(lead.pipeline?.stages, lead.stage)}
             />
             <StatCard
               icon={<Clock className="h-4 w-4" />}
@@ -378,10 +376,10 @@ const LeadDetail = () => {
                           <div className="flex items-start justify-between">
                             <div>
                               <Badge
-                                variant={getLeadStageBadgeVariant(entry.stage) as any}
+                                variant={getLeadStageBadgeVariant(stageCategory(lead.pipeline?.stages, entry.stage)) as any}
                                 className="mb-1"
                               >
-                                {formatStage(entry.stage)}
+                                {stageLabel(lead.pipeline?.stages, entry.stage)}
                               </Badge>
                               <p className="text-xs text-muted-foreground">
                                 {format(new Date(entry.enteredAt), "MMM d, yyyy 'at' h:mm a")}

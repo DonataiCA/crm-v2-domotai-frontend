@@ -1,11 +1,14 @@
 
 import { z } from "zod";
+import { ProjectStatus } from "@/constants";
 
 export const projectFormSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(2, "Name must be at least 2 characters"),
   description: z.string().optional(),
-  status: z.enum(["Not Started", "In Progress", "On Hold", "Completed"]),
+  // Derivado del catálogo, no una lista repetida: así el formulario no puede
+  // desincronizarse de los valores que acepta el backend.
+  status: z.nativeEnum(ProjectStatus),
   start_date: z.string().optional(),
   end_date: z.string().optional(),
   contact_ids: z.array(z.string()).default([]),

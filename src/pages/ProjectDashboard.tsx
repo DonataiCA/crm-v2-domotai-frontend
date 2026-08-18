@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { ProjectStatus, normalizeProjectStatus, isProjectInProgress } from "@/constants";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,12 +111,13 @@ const ProjectDashboard = () => {
     return projects.filter((p) => {
       const q = searchQuery.toLowerCase();
       const nameMatch = !q || p.name.toLowerCase().includes(q) || p.description?.toLowerCase().includes(q);
+      // El filtro usa minúscula_snake y el estado guardado MAYÚSCULA_SNAKE, así
+      // que se comparan ambos normalizados. Un proyecto sin estado cuenta como
+      // no empezado, que es lo que muestra la tabla.
+      const canonicalStatus = normalizeProjectStatus(p.status) ?? ProjectStatus.NOT_STARTED;
       const statusMatch =
         statusFilter === "all" ||
-        (statusFilter === "not_started" && (!p.status || p.status === "Not Started")) ||
-        (statusFilter === "in_progress" && p.status === "In Progress") ||
-        (statusFilter === "on_hold" && p.status === "On Hold") ||
-        (statusFilter === "completed" && p.status === "Completed");
+        canonicalStatus === statusFilter.toUpperCase();
       return nameMatch && statusMatch;
     });
   }, [projects, searchQuery, statusFilter]);
@@ -145,8 +147,8 @@ const ProjectDashboard = () => {
 
   // Stats
   const totalValue = projects.reduce((sum, p) => sum + (p.price || 0), 0);
-  const completedCount = projects.filter(p => p.status === "Completed").length;
-  const inProgressCount = projects.filter(p => p.status === "In Progress").length;
+  const completedCount = projects.filter(p => normalizeProjectStatus(p.status) === ProjectStatus.COMPLETED).length;
+  const inProgressCount = projects.filter(p => isProjectInProgress(p.status)).length;
 
   const toggleColumn = (col: ProjectColumnKey) => {
     setVisibleColumns((prev) => {

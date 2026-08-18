@@ -133,7 +133,10 @@ export const LeadBoard = ({ pipeline }: LeadBoardProps) => {
 
     const droppedSlug = destination.droppableId;
     const stage = pipeline.stages.find(s => s.slug === droppedSlug);
-    const newStage = stage?.name || droppedSlug;
+    // Se persiste el SLUG, nunca el nombre: el backend valida `^[a-z0-9_]+$` y
+    // la base lo restringe con `leads_stage_slug_check`, así que "Negociación"
+    // se rechazaría con un 400. El droppableId ya es el slug de la columna.
+    const newStage = stage?.slug ?? droppedSlug;
     const lead = data?.find(l => l.id === draggableId);
 
     if (!lead) return;

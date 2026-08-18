@@ -1,4 +1,12 @@
-import { TaskPriority, TaskStatus, LeadStage, UserRole, normalizeRole } from './enums';
+import {
+  TaskPriority,
+  TaskStatus,
+  StageCategory,
+  UserRole,
+  ProjectStatus,
+  normalizeRole,
+  normalizeProjectStatus,
+} from './enums';
 
 // ─── Task Priority Colors ───────────────────────────────────────────────────
 
@@ -38,24 +46,29 @@ export function getStatusBadgeVariant(status: string): string {
 }
 
 // ─── Lead Stage Colors ─────────────────────────────────────────────────────
+// Se decide por la CATEGORÍA de la etapa, no por su slug: las etapas son
+// configurables por organización, así que "ganado" en un pipeline puede
+// llamarse "closed_won" en otro. `category` es el único campo estable.
 
-export function getLeadStageBadgeVariant(stage: string): string {
-  if (stage === LeadStage.CLOSED_WON) return 'default';
-  if (stage === LeadStage.CLOSED_LOST) return 'destructive';
+export function getLeadStageBadgeVariant(category: string | null | undefined): string {
+  if (category === StageCategory.WON) return 'default';
+  if (category === StageCategory.LOST) return 'destructive';
   return 'outline';
 }
 
 // ─── Project Status Colors ─────────────────────────────────────────────────
 
 const PROJECT_STATUS_COLORS: Record<string, string> = {
-  'Completed': 'bg-green-500',
-  'In Progress': 'bg-blue-500',
-  'On Hold': 'bg-yellow-500',
-  'Not Started': 'bg-gray-500',
+  [ProjectStatus.COMPLETED]: 'bg-green-500',
+  [ProjectStatus.IN_PROGRESS]: 'bg-blue-500',
+  [ProjectStatus.ON_HOLD]: 'bg-yellow-500',
+  [ProjectStatus.NOT_STARTED]: 'bg-gray-500',
+  [ProjectStatus.ARCHIVED]: 'bg-slate-400',
 };
 
-export function getProjectStatusColor(status: string): string {
-  return PROJECT_STATUS_COLORS[status] ?? 'bg-gray-500';
+export function getProjectStatusColor(status: string | null | undefined): string {
+  const canonical = normalizeProjectStatus(status);
+  return (canonical && PROJECT_STATUS_COLORS[canonical]) ?? 'bg-gray-500';
 }
 
 // ─── User Role Colors ──────────────────────────────────────────────────────

@@ -1,4 +1,14 @@
 import { useState } from "react";
+import {
+  TaskStatus,
+  TaskPriority,
+  ProjectStatus,
+  normalizeTaskStatus,
+  normalizeTaskPriority,
+  normalizeProjectStatus,
+  getTaskStatusLabel,
+  getProjectStatusLabel,
+} from "@/constants";
 import { useParams } from "react-router-dom";
 import axios from "axios";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -66,21 +76,37 @@ interface PortalData {
   share: ShareInfo;
 }
 
+// Claves canónicas. Este mapa lo comparten estados de tarea (TODO, IN_PROGRESS,
+// ON_HOLD, COMPLETED) y de proyecto (NOT_STARTED, ARCHIVED), que es como se usa
+// más abajo: mismo color para el mismo significado.
 const statusColors: Record<string, string> = {
-  "To Do": "bg-slate-100 text-slate-700",
-  "In Progress": "bg-blue-100 text-blue-700",
-  Done: "bg-emerald-100 text-emerald-700",
-  Completed: "bg-emerald-100 text-emerald-700",
-  Blocked: "bg-red-100 text-red-700",
-  Review: "bg-amber-100 text-amber-700",
+  [TaskStatus.TODO]: "bg-slate-100 text-slate-700",
+  [ProjectStatus.NOT_STARTED]: "bg-slate-100 text-slate-700",
+  [TaskStatus.IN_PROGRESS]: "bg-blue-100 text-blue-700",
+  [TaskStatus.COMPLETED]: "bg-emerald-100 text-emerald-700",
+  [TaskStatus.ON_HOLD]: "bg-amber-100 text-amber-700",
+  [ProjectStatus.ARCHIVED]: "bg-slate-100 text-slate-500",
 };
 
+/** Color por estado, tolerante con las grafías históricas. */
+function statusClass(status: string | null | undefined): string {
+  const canonical = normalizeTaskStatus(status) ?? normalizeProjectStatus(status);
+  return (canonical && statusColors[canonical]) || "";
+}
+
+// "Critical" no existía en el catálogo: la prioridad máxima es URGENT.
 const priorityColors: Record<string, string> = {
-  Low: "bg-slate-100 text-slate-600",
-  Medium: "bg-blue-100 text-blue-600",
-  High: "bg-amber-100 text-amber-700",
-  Critical: "bg-red-100 text-red-700",
+  [TaskPriority.LOW]: "bg-slate-100 text-slate-600",
+  [TaskPriority.MEDIUM]: "bg-blue-100 text-blue-600",
+  [TaskPriority.HIGH]: "bg-amber-100 text-amber-700",
+  [TaskPriority.URGENT]: "bg-red-100 text-red-700",
 };
+
+/** Color por prioridad, tolerante con las grafías históricas. */
+function priorityClass(priority: string | null | undefined): string {
+  const canonical = normalizeTaskPriority(priority);
+  return (canonical && priorityColors[canonical]) || "";
+}
 
 const ClientPortal = () => {
   const { shareToken } = useParams<{ shareToken: string }>();
@@ -246,9 +272,9 @@ const ClientPortal = () => {
             {project.status && (
               <Badge
                 variant="secondary"
-                className={cn(statusColors[project.status] || "")}
+                className={cn(statusClass(project.status))}
               >
-                {project.status}
+                {getProjectStatusLabel(project.status)}
               </Badge>
             )}
             {project.startDate && (
@@ -311,16 +337,16 @@ const ClientPortal = () => {
                             variant="secondary"
                             className={cn(
                               "text-[10px]",
-                              statusColors[task.status] || ""
+                              statusClass(task.status)
                             )}
                           >
-                            {task.status}
+                            {getTaskStatusLabel(task.status)}
                           </Badge>
                           <Badge
                             variant="secondary"
                             className={cn(
                               "text-[10px]",
-                              priorityColors[task.priority] || ""
+                              priorityClass(task.priority)
                             )}
                           >
                             {task.priority}
@@ -394,13 +420,13 @@ const ClientPortal = () => {
               <div className="flex flex-wrap gap-1 mt-2">
                 <Badge
                   variant="secondary"
-                  className={cn("text-xs", statusColors[selectedTask.status] || "")}
+                  className={cn("text-xs", statusClass(selectedTask.status))}
                 >
                   {selectedTask.status}
                 </Badge>
                 <Badge
                   variant="secondary"
-                  className={cn("text-xs", priorityColors[selectedTask.priority] || "")}
+                  className={cn("text-xs", priorityClass(selectedTask.priority))}
                 >
                   {selectedTask.priority}
                 </Badge>

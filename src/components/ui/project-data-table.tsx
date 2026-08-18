@@ -1,4 +1,5 @@
 import * as React from "react";
+import { getProjectStatusLabel } from "@/constants";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { cva } from "class-variance-authority";
@@ -135,7 +136,7 @@ export const ProjectDataTable = ({
                     {visibleColumns.has("status") && (
                       <TableCell>
                         <Badge className={cn(statusBadgeVariants({ variant }))}>
-                          {project.status || "Not Started"}
+                          {getProjectStatusLabel(project.status) || "Not Started"}
                         </Badge>
                       </TableCell>
                     )}

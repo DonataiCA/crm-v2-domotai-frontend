@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Form } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { projectFormSchema, type ProjectFormValues } from "./form/types";
+import { ProjectStatus, normalizeProjectStatus } from "@/constants";
 import { ContactSelector } from "./form/ContactSelector";
 import { BasicInfoFields } from "./form/BasicInfoFields";
 import { DateFields } from "./form/DateFields";
@@ -41,7 +42,7 @@ export const ProjectForm = ({ onSuccess, onCancel, initialData }: ProjectFormPro
     defaultValues: {
       name: initialData?.name || "",
       description: initialData?.description || "",
-      status: initialData?.status || "Not Started",
+      status: normalizeProjectStatus(initialData?.status) ?? ProjectStatus.NOT_STARTED,
       start_date: initialData?.start_date || "",
       end_date: initialData?.end_date || "",
       contact_ids: extractContactIds(),

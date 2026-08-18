@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { isProjectInProgress, getProjectStatusLabel } from "@/constants";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -170,8 +171,8 @@ const ClientLogin = () => {
               </CardHeader>
               <CardContent className="pt-0">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <Badge variant={project.projectStatus === "In Progress" ? "default" : "secondary"}>
-                    {project.projectStatus || "Active"}
+                  <Badge variant={isProjectInProgress(project.projectStatus) ? "default" : "secondary"}>
+                    {getProjectStatusLabel(project.projectStatus) || "Active"}
                   </Badge>
                   {project.startDate && (
                     <span className="text-xs text-muted-foreground flex items-center gap-1">

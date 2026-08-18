@@ -1,4 +1,4 @@
-import type { TaskStatusType, TaskPriorityType, LeadStageType, ProjectStatusType, PricingTypeType } from '@/constants/enums';
+import type { TaskStatusType, TaskPriorityType, ProjectStatusType, PricingTypeType } from '@/constants/enums';
 
 // ─── Generic pagination wrapper ───────────────────────────────────────────────
 
@@ -210,7 +210,8 @@ export interface Lead {
   id: string;
   name: string | null;
   details: string | null;
-  stage: LeadStageType | string | null;
+  /** Slug de la etapa dentro de su pipeline, no un catálogo global. */
+  stage: string | null;
   pipelineId: string | null;
   price: number | null;
   pricingType: PricingTypeType | string | null;
@@ -232,6 +233,12 @@ export interface Lead {
   assignee: UserRef | null;
   creator: UserRef | null;
   project: ProjectRef | null;
+  /**
+   * El pipeline con sus etapas. El backend lo incluye porque `stage` es un slug:
+   * sin el catálogo del pipeline no se puede resolver el nombre visible ni la
+   * categoría con la que se decide el color.
+   */
+  pipeline?: Pipeline | null;
   events?: LeadEvent[];
   stageHistory?: LeadStageHistory[];
   fileLinks?: FileLink[];

@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { UserSelector } from "../common/UserSelector";
 import { Textarea } from "@/components/ui/textarea";
 import { useOrganization } from "@/contexts/OrganizationContext";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { leadService } from "@/services/lead.service";
 import { companyService } from "@/services/company.service";
@@ -49,16 +49,21 @@ export const LeadForm = ({ onSuccess, onCancel, initialData, defaultPipelineId }
     ? pipelines.find(p => p.id === defaultPipelineId)
     : pipelines.find(p => p.isDefault) || pipelines[0];
 
+  // El valor es el SLUG, que es lo que se persiste; el nombre sólo se muestra.
   const dynamicStages = (activePipeline?.stages || [])
+    .slice()
     .sort((a, b) => a.order - b.order)
-    .map(s => ({ value: s.name, label: s.name }));
+    .map(s => ({ value: s.slug, label: s.name }));
 
   const form = useForm<LeadFormValues>({
     resolver: zodResolver(leadFormSchema),
     defaultValues: {
       contact_id: initialData?.contact_id || initialData?.contactId || "",
       company_id: initialData?.companyId || "",
-      stage: initialData?.stage || "new",
+      // Sin valor de arranque: las etapas llegan por query, así que la inicial
+      // se rellena en el efecto de abajo. El "new" que había aquí era un slug
+      // inventado que no existe en ningún pipeline configurado.
+      stage: initialData?.stage || "",
       next_follow_up: initialData?.next_follow_up || initialData?.nextFollowUp || "",
       name: initialData?.name || "",
       pricing_type: initialData?.pricing_type || initialData?.pricingType || "flat",
@@ -70,6 +75,16 @@ export const LeadForm = ({ onSuccess, onCancel, initialData, defaultPipelineId }
       details: initialData?.details || "",
     },
   });
+
+  // Las etapas llegan por query, después del primer render. En cuanto están,
+  // se preselecciona la primera del pipeline si el formulario aún no tiene una
+  // (crear un lead sin abrir el desplegable es el caso habitual).
+  const firstStageSlug = dynamicStages[0]?.value;
+  useEffect(() => {
+    if (firstStageSlug && !form.getValues('stage')) {
+      form.setValue('stage', firstStageSlug);
+    }
+  }, [firstStageSlug, form]);
 
   const handleSubmit = async (values: LeadFormValues, createAnother: boolean = false) => {
     if (!currentOrganization?.id) {
@@ -211,7 +226,7 @@ export const LeadForm = ({ onSuccess, onCancel, initialData, defaultPipelineId }
               <FormLabel>Stage</FormLabel>
               <Select
                 onValueChange={field.onChange}
-                defaultValue={field.value}
+                value={field.value}
               >
                 <FormControl>
                   <SelectTrigger>

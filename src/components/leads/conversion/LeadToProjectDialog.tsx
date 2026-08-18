@@ -1,5 +1,6 @@
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ProjectStatus } from "@/constants";
 import { ProjectForm } from "@/components/projects/ProjectForm";
 import { useToast } from "@/hooks/use-toast";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -61,7 +62,7 @@ export const LeadToProjectDialog = ({
     payment_date: lead?.paymentDate || '',
     recurring_start_date: lead?.recurringStartDate || '',
     recurring_end_date: lead?.recurringEndDate || '',
-    status: "Not Started" as const,
+    status: ProjectStatus.NOT_STARTED,
     organization_id: lead?.organizationId || currentOrganization?.id
   };
 

@@ -17,16 +17,16 @@ import {
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { Link } from "react-router-dom";
 import { FolderKanban, Activity, AlertCircle } from "lucide-react";
+import { ProjectStatus, normalizeProjectStatus, getProjectStatusLabel } from "@/constants";
 
+// Claves canónicas: las grafías históricas ("active", "In Progress") las colapsa
+// `normalizeProjectStatus`, así que ya no hace falta una entrada por variante.
 const STATUS_COLORS: Record<string, string> = {
-  "In Progress": "#4A89B9",
-  active: "#4A89B9",
-  "Not Started": "#94a3b8",
-  Completed: "#10b981",
-  completed: "#10b981",
-  "On Hold": "#f59e0b",
-  Cancelled: "#ef4444",
-  cancelled: "#ef4444",
+  [ProjectStatus.IN_PROGRESS]: "#4A89B9",
+  [ProjectStatus.NOT_STARTED]: "#94a3b8",
+  [ProjectStatus.COMPLETED]: "#10b981",
+  [ProjectStatus.ON_HOLD]: "#f59e0b",
+  [ProjectStatus.ARCHIVED]: "#94a3b8",
 };
 
 const TASK_STATUS_COLORS: Record<string, string> = {
@@ -47,24 +47,23 @@ const FALLBACK_PIE_COLORS = [
 ];
 
 function getStatusColor(status: string): string {
-  return STATUS_COLORS[status] || FALLBACK_PIE_COLORS[0];
+  const canonical = normalizeProjectStatus(status);
+  return (canonical && STATUS_COLORS[canonical]) || FALLBACK_PIE_COLORS[0];
 }
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status }: { status: string | null | undefined }) {
   const colorMap: Record<string, string> = {
-    "In Progress": "bg-blue-100 text-blue-700 border-blue-200",
-    active: "bg-blue-100 text-blue-700 border-blue-200",
-    "Not Started": "bg-slate-100 text-slate-600 border-slate-200",
-    Completed: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    completed: "bg-emerald-100 text-emerald-700 border-emerald-200",
-    "On Hold": "bg-amber-100 text-amber-700 border-amber-200",
-    Cancelled: "bg-red-100 text-red-700 border-red-200",
-    cancelled: "bg-red-100 text-red-700 border-red-200",
+    [ProjectStatus.IN_PROGRESS]: "bg-blue-100 text-blue-700 border-blue-200",
+    [ProjectStatus.NOT_STARTED]: "bg-slate-100 text-slate-600 border-slate-200",
+    [ProjectStatus.COMPLETED]: "bg-emerald-100 text-emerald-700 border-emerald-200",
+    [ProjectStatus.ON_HOLD]: "bg-amber-100 text-amber-700 border-amber-200",
+    [ProjectStatus.ARCHIVED]: "bg-slate-100 text-slate-500 border-slate-200",
   };
-  const cls = colorMap[status] || "bg-slate-100 text-slate-600 border-slate-200";
+  const canonical = normalizeProjectStatus(status) ?? ProjectStatus.NOT_STARTED;
+  const cls = colorMap[canonical] || "bg-slate-100 text-slate-600 border-slate-200";
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${cls}`}>
-      {status}
+      {getProjectStatusLabel(canonical)}
     </span>
   );
 }
@@ -107,7 +106,7 @@ export function OperationalDashboard() {
   const projects = data?.projects ?? [];
 
   const pieData = Object.entries(projectsByStatus).map(([status, count], idx) => ({
-    name: status,
+    name: getProjectStatusLabel(status),
     value: count,
     color: getStatusColor(status) || FALLBACK_PIE_COLORS[idx % FALLBACK_PIE_COLORS.length],
   }));
@@ -260,7 +259,7 @@ export function OperationalDashboard() {
                         </Link>
                       </td>
                       <td className="py-3 pr-4">
-                        <StatusBadge status={project.status || "Not Started"} />
+                        <StatusBadge status={project.status} />
                       </td>
                       <td className="py-3 text-right tabular-nums">{project.taskCount}</td>
                       <td className="py-3 text-right tabular-nums">{project.phaseCount}</td>
