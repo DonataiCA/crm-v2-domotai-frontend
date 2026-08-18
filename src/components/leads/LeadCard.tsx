@@ -5,14 +5,12 @@ import { Badge } from "@/components/ui/badge";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
-import { LeadDetailsDialog } from "./LeadDetailsDialog";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { leadService } from "@/services/lead.service";
 import { Lead } from "@/types/api";
 
 interface LeadCardProps {
   lead: Lead;
-  onLeadClick?: (lead: Lead) => void;
   refetch?: () => void;
 }
 
@@ -26,8 +24,7 @@ function isFollowUpOverdue(lead: Lead): boolean {
   return new Date(lead.nextFollowUp) < new Date();
 }
 
-export const LeadCard = ({ lead, onLeadClick, refetch }: LeadCardProps) => {
-  const [showDetails, setShowDetails] = useState(false);
+export const LeadCard = ({ lead, refetch }: LeadCardProps) => {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
   const { toast } = useToast();
@@ -65,18 +62,15 @@ export const LeadCard = ({ lead, onLeadClick, refetch }: LeadCardProps) => {
         className={`group bg-card rounded-lg border shadow-sm p-3 cursor-pointer transition-all hover:shadow-md hover:border-primary/30 ${
           overdue ? 'border-l-[3px] border-l-amber-500' : ''
         }`}
-        onClick={() => setShowDetails(true)}
+        onClick={() => navigate(`/leads/${lead.id}`)}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Row 1: Name + Detail link + Delete */}
+        {/* Row 1: Name + Delete */}
         <div className="flex items-start justify-between gap-2">
-          <h4
-            className="font-medium text-sm leading-tight line-clamp-1 hover:underline cursor-pointer flex items-center gap-1 group/name"
-            onClick={(e) => { e.stopPropagation(); navigate(`/leads/${lead.id}`); }}
-          >
+          <h4 className="font-medium text-sm leading-tight line-clamp-1 flex items-center gap-1 group-hover:underline">
             {lead.name || 'Unnamed Lead'}
-            <ExternalLink className="h-3 w-3 opacity-0 group-hover/name:opacity-60 shrink-0 transition-opacity" />
+            <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-60 shrink-0 transition-opacity" />
           </h4>
           <Button
             variant="ghost"
@@ -142,13 +136,6 @@ export const LeadCard = ({ lead, onLeadClick, refetch }: LeadCardProps) => {
           </div>
         </div>
       </div>
-
-      <LeadDetailsDialog
-        lead={lead}
-        open={showDetails}
-        onOpenChange={setShowDetails}
-        onUpdate={refetch}
-      />
 
       <ConfirmDialog
         open={confirmDelete}
