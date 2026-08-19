@@ -42,7 +42,7 @@ const Leads = () => {
   return (
     <>
       {/* Header row */}
-      <div className="flex justify-between items-start mb-4">
+      <div className="flex justify-between items-start mb-4 shrink-0">
         <div>
           <h1 className="text-3xl font-bold">Lead Pipeline</h1>
           {currentOrganization && (
@@ -104,7 +104,7 @@ const Leads = () => {
         <Tabs
           value={activePipeline?.id ?? ''}
           onValueChange={setSelectedPipelineId}
-          className="mb-4"
+          className="mb-4 shrink-0"
         >
           <TabsList className="h-9 overflow-x-auto">
             {pipelines.map(p => (

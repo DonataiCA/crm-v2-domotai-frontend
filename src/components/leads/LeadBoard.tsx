@@ -1,7 +1,23 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { DragDropContext, type DropResult } from "@hello-pangea/dnd";
+import {
+  DndContext,
+  DragOverlay,
+  KeyboardSensor,
+  MeasuringStrategy,
+  MouseSensor,
+  TouchSensor,
+  pointerWithin,
+  rectIntersection,
+  useSensor,
+  useSensors,
+  type CollisionDetection,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
 import { useToast } from "@/hooks/use-toast";
+import { ToastAction } from "@/components/ui/toast";
 import { LeadStageColumn } from "./board/LeadStageColumn";
+import { LeadCard } from "./LeadCard";
 import { useMemo, useState } from "react";
 import { LeadToProjectDialog } from "./conversion/LeadToProjectDialog";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -24,6 +40,7 @@ export const LeadBoard = ({ pipeline }: LeadBoardProps) => {
   const { toast } = useToast();
   const [leadToConvert, setLeadToConvert] = useState<Lead | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeLeadId, setActiveLeadId] = useState<string | null>(null);
   const isMobile = useIsMobile();
   const { currentOrganization } = useOrganization();
   const queryClient = useQueryClient();
@@ -80,27 +97,29 @@ export const LeadBoard = ({ pipeline }: LeadBoardProps) => {
     URL.revokeObjectURL(url);
   };
 
-  // Se agrupa una sola vez para TODAS las columnas, en lugar de recorrer los leads
-  // una vez por columna. Eso no es sólo eficiencia: filtrando por columna nada
-  // impedía que dos etapas cuyo nombre y slug colisionan al normalizar reclamaran
-  // el mismo lead, que entonces se pintaba dos veces y generaba dos <Draggable>
-  // con el mismo draggableId dentro del mismo DragDropContext — la librería exige
-  // ids únicos y con duplicados el arrastre falla de forma errática.
-  const leadsByStage = useMemo(() => {
-    // Índice `clave normalizada → slug`. Dos pasadas a propósito: primero los
-    // slugs de todas las etapas y sólo después los nombres, para que el nombre de
-    // una etapa no le quite la clave al slug exacto de otra. El slug es el valor
-    // canónico que persiste el backend, así que tiene prioridad.
-    const slugByKey = new Map<string, string>();
+  // Índice `clave normalizada → slug`. Dos pasadas a propósito: primero los slugs de
+  // todas las etapas y sólo después los nombres, para que el nombre de una etapa no le
+  // quite la clave al slug exacto de otra. El slug es el valor canónico que persiste el
+  // backend, así que tiene prioridad.
+  const slugByKey = useMemo(() => {
+    const index = new Map<string, string>();
     for (const stage of pipeline.stages) {
       const key = normalizeStageKey(stage.slug);
-      if (!slugByKey.has(key)) slugByKey.set(key, stage.slug);
+      if (!index.has(key)) index.set(key, stage.slug);
     }
     for (const stage of pipeline.stages) {
       const key = normalizeStageKey(stage.name);
-      if (!slugByKey.has(key)) slugByKey.set(key, stage.slug);
+      if (!index.has(key)) index.set(key, stage.slug);
     }
+    return index;
+  }, [pipeline.stages]);
 
+  // Se agrupa una sola vez para TODAS las columnas, en lugar de recorrer los leads
+  // una vez por columna. Eso no es sólo eficiencia: filtrando por columna nada
+  // impedía que dos etapas cuyo nombre y slug colisionan al normalizar reclamaran
+  // el mismo lead, que entonces se pintaba dos veces y generaba dos elementos
+  // arrastrables con el mismo id — con duplicados el arrastre falla de forma errática.
+  const leadsByStage = useMemo(() => {
     // Se parte de todas las etapas para que las columnas vacías sigan existiendo.
     const grouped = new Map<string, Lead[]>(pipeline.stages.map((stage) => [stage.slug, []]));
     for (const lead of filteredData ?? []) {
@@ -111,7 +130,7 @@ export const LeadBoard = ({ pipeline }: LeadBoardProps) => {
       if (slug) grouped.get(slug)?.push(lead);
     }
     return grouped;
-  }, [filteredData, pipeline.stages]);
+  }, [filteredData, pipeline.stages, slugByKey]);
 
   // La etapa se pinta de inmediato y se revierte si el backend falla. Antes esto
   // esperaba a la respuesta HTTP: la librería ya había devuelto la tarjeta a su
@@ -134,39 +153,69 @@ export const LeadBoard = ({ pipeline }: LeadBoardProps) => {
     },
     onSuccess: (_data, { lead, stageSlug }) => {
       const stage = pipeline.stages.find((s) => s.slug === stageSlug);
-      // El diálogo de conversión se abre sólo cuando el backend ha confirmado el
-      // movimiento, para no arrancarlo por un cambio que acabe revirtiéndose.
-      if (stage?.category === 'won' && !lead.converted) {
-        setLeadToConvert(lead);
-      }
-      toast({ title: "Lead moved", description: `Moved to ${stage?.name ?? stageSlug}` });
+      // Convertir a proyecto se ofrece, no se impone: antes el diálogo se abría solo
+      // al soltar en una etapa ganadora e interrumpía el arrastre. Sigue siendo el
+      // único acceso a la conversión, así que se propone aquí, que es cuando viene a
+      // cuento, y se descarta ignorando el aviso.
+      const canConvert = stage?.category === 'won' && !lead.converted;
+      toast({
+        title: "Lead moved",
+        description: `Moved to ${stage?.name ?? stageSlug}`,
+        action: canConvert ? (
+          <ToastAction
+            altText="Convert this lead to a project"
+            onClick={() => setLeadToConvert(lead)}
+          >
+            Convert to project
+          </ToastAction>
+        ) : undefined,
+      });
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: leadsQueryKey });
     },
   });
 
-  const handleDragEnd = (result: DropResult) => {
-    const { destination, source, draggableId } = result;
+  // El ratón arrastra en cuanto se mueven 5px, para que un click sobre la tarjeta siga
+  // abriendo el lead y los botones de dentro sigan respondiendo. En táctil se exige
+  // mantener pulsado 200ms, que es lo que deja intacto el scroll con el dedo.
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+    useSensor(KeyboardSensor),
+  );
 
-    if (!destination ||
-        (destination.droppableId === source.droppableId &&
-         destination.index === source.index) ||
-        !currentOrganization) {
-      return;
-    }
+  // `pointerWithin` es el más preciso con columnas grandes, pero no devuelve nada si el
+  // puntero queda fuera de todas; en ese caso se cae a la intersección de rectángulos.
+  const collisionDetection: CollisionDetection = (args) => {
+    const byPointer = pointerWithin(args);
+    return byPointer.length > 0 ? byPointer : rectIntersection(args);
+  };
 
-    const droppedSlug = destination.droppableId;
-    const stage = pipeline.stages.find(s => s.slug === droppedSlug);
-    // Se persiste el SLUG, nunca el nombre: el backend valida `^[a-z0-9_]+$` y
-    // la base lo restringe con `leads_stage_slug_check`, así que "Negociación"
-    // se rechazaría con un 400. El droppableId ya es el slug de la columna.
-    const newStage = stage?.slug ?? droppedSlug;
-    const lead = data?.find(l => l.id === draggableId);
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveLeadId(String(event.active.id));
+  };
 
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveLeadId(null);
+
+    if (!over || !currentOrganization) return;
+
+    const leadId = String(active.id);
+    const lead = data?.find(l => l.id === leadId);
     if (!lead) return;
 
-    moveLead.mutate({ leadId: draggableId, stageSlug: newStage, lead });
+    // Se persiste el SLUG, nunca el nombre: el backend valida `^[a-z0-9_]+$` y
+    // la base lo restringe con `leads_stage_slug_check`, así que "Negociación"
+    // se rechazaría con un 400. El id de la zona de drop ya es el slug de la columna.
+    const newStage = String(over.id);
+    // La etapa guardada puede ser una variante histórica ("Negociación", "NUEVO"), así
+    // que se compara por la columna en la que está pintada, no por el texto crudo.
+    const currentStage = lead.stage ? slugByKey.get(normalizeStageKey(lead.stage)) : undefined;
+    if (currentStage === newStage) return;
+
+    moveLead.mutate({ leadId, stageSlug: newStage, lead });
   };
 
   if (!currentOrganization) {
@@ -201,48 +250,41 @@ export const LeadBoard = ({ pipeline }: LeadBoardProps) => {
   const columns = pipeline.stages.map((stage) => (
     <LeadStageColumn
       key={stage.id}
-      stage={{ value: stage.slug, label: stage.name, color: stage.color }}
+      stage={{ value: stage.slug, label: stage.name, color: stage.color, category: stage.category }}
       leads={leadsByStage.get(stage.slug) ?? []}
       onUpdate={() => refetch()}
       isMobile={isMobile}
     />
   ));
 
+  const activeLead = activeLeadId ? data?.find(l => l.id === activeLeadId) : undefined;
+
   return (
     <>
-      {/* Pipeline Summary */}
-      <div className="grid grid-cols-3 gap-4 mb-4">
-        <div className="flex items-center gap-3 bg-card border rounded-lg p-3">
-          <div className="h-9 w-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-            <Users className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Total Leads</p>
-            <p className="text-lg font-semibold">{totalLeads}</p>
-          </div>
+      {/* Pipeline Summary. Una sola línea por dato: la etiqueta y la cifra comparten
+          fila en vez de apilarse, que es lo que hacía la banda el doble de alta. Las
+          pastillas se ajustan a su contenido en vez de repartirse el ancho: a pantalla
+          completa, estiradas a un tercio cada una, dejaban un hueco muerto en medio. */}
+      <div className="flex flex-wrap items-center gap-2 mb-3 shrink-0">
+        <div className="flex items-center gap-2 bg-card border rounded-lg px-3 py-1.5">
+          <Users className="h-4 w-4 text-blue-600 shrink-0" />
+          <span className="text-xs text-muted-foreground">Total Leads</span>
+          <span className="text-sm font-semibold tabular-nums">{totalLeads}</span>
         </div>
-        <div className="flex items-center gap-3 bg-card border rounded-lg p-3">
-          <div className="h-9 w-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-            <DollarSign className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Pipeline Value</p>
-            <p className="text-lg font-semibold">${totalValue.toLocaleString()}</p>
-          </div>
+        <div className="flex items-center gap-2 bg-card border rounded-lg px-3 py-1.5">
+          <DollarSign className="h-4 w-4 text-emerald-600 shrink-0" />
+          <span className="text-xs text-muted-foreground">Pipeline Value</span>
+          <span className="text-sm font-semibold tabular-nums">${totalValue.toLocaleString()}</span>
         </div>
-        <div className="flex items-center gap-3 bg-card border rounded-lg p-3">
-          <div className="h-9 w-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
-            <TrendingUp className="h-4 w-4" />
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Active Leads</p>
-            <p className="text-lg font-semibold">{activeLeads}</p>
-          </div>
+        <div className="flex items-center gap-2 bg-card border rounded-lg px-3 py-1.5">
+          <TrendingUp className="h-4 w-4 text-amber-600 shrink-0" />
+          <span className="text-xs text-muted-foreground">Active Leads</span>
+          <span className="text-sm font-semibold tabular-nums">{activeLeads}</span>
         </div>
       </div>
 
       {/* Search & Export */}
-      <div className="flex items-center gap-2 mb-4">
+      <div className="flex items-center gap-2 mb-3 shrink-0">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -259,31 +301,46 @@ export const LeadBoard = ({ pipeline }: LeadBoardProps) => {
       </div>
 
       {/* Pipeline Board.
-          Este div es el ÚNICO contenedor de scroll del tablero, y scrollea en los
-          dos ejes. Que sea uno solo es lo que permite a @hello-pangea/dnd
-          registrarlo como contenedor de todas las columnas y auto-scrollearlo
-          durante el arrastre; con las columnas scrolleando por su cuenta, el
-          scroll horizontal quedaba fuera de su alcance.
-          Aquí hubo un auto-scroll manual (`mousemove` + requestAnimationFrame
-          moviendo `scrollLeft`) que movía el tablero a espaldas de la librería y
-          dejaba obsoletas las posiciones medidas al empezar el arrastre, que es
-          justamente lo que rompía el drop. No volver a añadirlo. */}
-      <DragDropContext onDragEnd={handleDragEnd}>
+          El tablero scrollea en horizontal y cada columna en vertical. Esa
+          combinación es la que @hello-pangea/dnd no soporta —sólo admite un
+          contenedor de scroll por zona de drop— y por eso soltar en una columna
+          alcanzada con scroll no hacía nada. @dnd-kit sí la soporta: con
+          `MeasuringStrategy.Always` vuelve a medir las zonas de drop durante el
+          arrastre, así que el scroll deja de invalidar las posiciones, y su
+          auto-scroll recorre todos los ancestros scrolleables en ambos ejes.
+          Nada de auto-scroll manual: la librería ya lo hace. */}
+      <DndContext
+        sensors={sensors}
+        collisionDetection={collisionDetection}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        onDragStart={handleDragStart}
+        onDragEnd={handleDragEnd}
+        onDragCancel={() => setActiveLeadId(null)}
+      >
         <div
-          className={isMobile ? 'flex flex-col gap-3 pb-4' : 'overflow-auto pb-4'}
-          style={isMobile ? undefined : { height: 'calc(100vh - 330px)' }}
+          className={isMobile ? 'flex flex-col gap-3 pb-4' : 'flex-1 min-h-0 overflow-x-auto overflow-y-hidden'}
         >
           {isMobile ? (
             columns
           ) : (
-            // El track intermedio toma la altura de la columna más alta (`w-max`
-            // lo desliga del ancho del tablero) y con `items-stretch` todas se
-            // estiran a esa medida. Sin él, las columnas cortas se quedarían a la
-            // altura del tablero y los fondos saldrían desparejos.
-            <div className="flex gap-3 items-stretch w-max min-h-full">{columns}</div>
+            // `h-full` da a las columnas una altura definida, que es lo que permite
+            // que su cuerpo scrollee por dentro; `w-max` las desliga del ancho del
+            // tablero para que el scroll horizontal sea del track, no de la página.
+            <div className="flex gap-3 h-full w-max">{columns}</div>
           )}
         </div>
-      </DragDropContext>
+
+        {/* La tarjeta que sigue al cursor se renderiza fuera del flujo, así que ningún
+            `overflow` la recorta — que es lo que hace compatible el scroll por columna
+            con el arrastre. El ancho es el de la columna menos su padding. */}
+        <DragOverlay dropAnimation={null}>
+          {activeLead ? (
+            <div className="w-[284px] rotate-[2deg] scale-105 shadow-lg cursor-grabbing">
+              <LeadCard lead={activeLead} refetch={() => refetch()} />
+            </div>
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       <LeadToProjectDialog
         lead={leadToConvert}

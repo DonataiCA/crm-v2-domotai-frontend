@@ -1,7 +1,11 @@
+import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { Droppable, Draggable } from "@hello-pangea/dnd";
+import { Button } from "@/components/ui/button";
+import { useDraggable, useDroppable } from "@dnd-kit/core";
 import { LeadCard } from "../LeadCard";
-import type { Lead } from '@/types/api';
+import { StageDateFilter } from "./StageDateFilter";
+import { NO_DATE_FILTER, filterLeadsByCreatedAt, type StageDateFilterValue } from "@/lib/lead-date-filter";
+import type { Lead, PipelineStage } from '@/types/api';
 import { DollarSign } from "lucide-react";
 
 interface LeadStageColumnProps {
@@ -9,6 +13,8 @@ interface LeadStageColumnProps {
     value: string;
     label: string;
     color?: string;
+    /** `won` es lo que decide que la etapa lleve filtro de fecha, nunca su nombre. */
+    category?: PipelineStage['category'];
   };
   leads: Lead[];
   isCollapsed?: boolean;
@@ -38,6 +44,27 @@ const COLOR_MAP: Record<string, { bg: string; border: string; text: string; dot:
   on_hold:              { bg: 'bg-slate-50',  border: 'border-slate-400',  text: 'text-slate-600',  dot: 'bg-slate-400' },
 };
 
+/**
+ * La tarjeta de origen no se mueve: se atenúa y quien sigue al cursor es el
+ * `DragOverlay` del tablero. Así la tarjeta arrastrada nunca queda recortada por
+ * el `overflow` de la columna, que es justo lo que permite que cada columna
+ * conserve su propio scroll vertical.
+ */
+const DraggableLeadCard = ({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) => {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id: lead.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      className={isDragging ? 'opacity-40' : undefined}
+    >
+      <LeadCard lead={lead} refetch={onUpdate} />
+    </div>
+  );
+};
+
 export const LeadStageColumn = ({
   stage,
   leads,
@@ -46,22 +73,35 @@ export const LeadStageColumn = ({
 }: LeadStageColumnProps) => {
   // Prefer explicit color field, fall back to slug-based lookup
   const colors = COLOR_MAP[stage.color ?? ''] ?? COLOR_MAP[stage.value] ?? COLOR_MAP.blue;
-  const totalValue = leads.reduce((sum, lead) => sum + (lead.price || 0), 0);
+  const { setNodeRef, isOver } = useDroppable({ id: stage.value });
+
+  // El filtro vive aquí y no en el tablero a propósito: así el resumen de arriba
+  // (Total Leads, Pipeline Value) sigue contándolo todo y no miente al ocultar.
+  // Tampoco se persiste: un filtro que se guarda y se olvida acaba haciendo creer
+  // que se han perdido leads.
+  const [dateFilter, setDateFilter] = useState<StageDateFilterValue>(NO_DATE_FILTER);
+  const isWonStage = stage.category === 'won';
+
+  const visibleLeads = isWonStage ? filterLeadsByCreatedAt(leads, dateFilter.range) : leads;
+  const hiddenCount = leads.length - visibleLeads.length;
+  // El importe es el de lo visible, para que cuadre con las tarjetas que hay en pantalla.
+  const totalValue = visibleLeads.reduce((sum, lead) => sum + (lead.price || 0), 0);
 
   return (
-    <div className={isMobile ? "w-full" : "w-[300px] shrink-0 flex flex-col"}>
-      {/* Stage Header. `sticky` lo mantiene a la vista mientras el tablero
-          scrollea en vertical; `bg-card` es opaco, que es lo que impide que las
-          tarjetas se transparenten por detrás al pasar. */}
-      <div className={`sticky top-0 z-10 rounded-t-xl border-t-[3px] ${colors.border} bg-card p-3 shrink-0`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className={`h-2 w-2 rounded-full ${colors.dot}`} />
-            <h3 className="font-semibold text-sm">{stage.label}</h3>
-            <Badge variant="secondary" className="h-5 px-1.5 text-xs font-medium">
-              {leads.length}
+    <div className={isMobile ? "w-full" : "w-[300px] shrink-0 flex flex-col h-full"}>
+      {/* Stage Header */}
+      <div className={`rounded-t-xl border-t-[3px] ${colors.border} bg-card p-3 shrink-0`}>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className={`h-2 w-2 rounded-full ${colors.dot} shrink-0`} />
+            <h3 className="font-semibold text-sm truncate">{stage.label}</h3>
+            <Badge variant="secondary" className="h-5 px-1.5 text-xs font-medium shrink-0">
+              {hiddenCount > 0 ? `${visibleLeads.length} of ${leads.length}` : leads.length}
             </Badge>
           </div>
+          {isWonStage && (
+            <StageDateFilter value={dateFilter} onChange={setDateFilter} hiddenCount={hiddenCount} />
+          )}
         </div>
         {totalValue > 0 && (
           <div className="flex items-center gap-1 mt-1.5 text-xs text-muted-foreground">
@@ -71,59 +111,49 @@ export const LeadStageColumn = ({
         )}
       </div>
 
-      {/* Drop Zone.
-          Este div NO puede llevar `overflow-y-auto`. @hello-pangea/dnd busca el
-          contenedor de scroll de cada Droppable empezando por el propio elemento
-          (`get-closest-scrollable.ts`) y se queda con el primero que encuentra: si
-          este scrollea, la búsqueda termina aquí y el scroll horizontal del tablero
-          nunca se registra, así que al scrollear para alcanzar una columna lejana
-          las medidas del arrastre quedan obsoletas y el drop se pierde. Dejándolo
-          sin overflow, el contenedor pasa a ser el tablero y la librería lo
-          trackea y lo auto-scrollea en ambos ejes por su cuenta. */}
-      <Droppable droppableId={stage.value}>
-        {(provided, snapshot) => (
-          <div
-            ref={provided.innerRef}
-            {...provided.droppableProps}
-            className={`flex-1 rounded-b-xl p-2 space-y-2 transition-colors border border-t-0 ${
-              snapshot.isDraggingOver
-                ? `${colors.bg} border-dashed ${colors.border}`
-                : 'bg-muted/20 border-border'
-            }`}
-          >
-            {leads.map((lead, index) => (
-              <Draggable key={lead.id} draggableId={lead.id} index={index}>
-                {(provided, snapshot) => (
-                  // La inclinación va en un div interno, no en el que recibe los
-                  // draggableProps: la librería reescribe el `transform` de ese
-                  // elemento en cada frame, así que ahí las clases de transform no
-                  // se ven y `transition-transform` sólo consigue que la tarjeta
-                  // vaya por detrás del cursor.
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.draggableProps}
-                    {...provided.dragHandleProps}
-                  >
-                    <div
-                      className={`transition-transform ${
-                        snapshot.isDragging ? 'rotate-[2deg] scale-105 shadow-lg' : ''
-                      }`}
-                    >
-                      <LeadCard lead={lead} refetch={onUpdate} />
-                    </div>
-                  </div>
-                )}
-              </Draggable>
-            ))}
-            {provided.placeholder}
-            {leads.length === 0 && !snapshot.isDraggingOver && (
-              <div className="flex items-center justify-center h-20 text-xs text-muted-foreground">
-                Drag leads here
-              </div>
-            )}
-          </div>
+      {/* Drop Zone. Cada columna scrollea por su cuenta: @dnd-kit vuelve a medir las
+          zonas de drop durante el arrastre y su auto-scroll recorre todos los
+          ancestros scrolleables, así que este `overflow-y-auto` conviviendo con el
+          scroll horizontal del tablero ya no rompe nada. */}
+      <div
+        ref={setNodeRef}
+        className={`flex-1 min-h-0 rounded-b-xl p-2 space-y-2 overflow-y-auto transition-colors border border-t-0 ${
+          isOver
+            ? `${colors.bg} border-dashed ${colors.border}`
+            : 'bg-muted/20 border-border'
+        }`}
+      >
+        {visibleLeads.map((lead) => (
+          <DraggableLeadCard key={lead.id} lead={lead} onUpdate={onUpdate} />
+        ))}
+
+        {visibleLeads.length === 0 && (
+          // Una columna vacía por culpa del filtro parece una columna rota, así que
+          // se dice que hay leads ocultos y se ofrece deshacerlo aquí mismo.
+          hiddenCount > 0 ? (
+            <div className="flex flex-col items-center justify-center gap-2 h-24 text-xs text-muted-foreground text-center px-2">
+              <span>No leads in this date range. {hiddenCount} hidden.</span>
+              <Button variant="outline" size="sm" className="h-7" onClick={() => setDateFilter(NO_DATE_FILTER)}>
+                Clear filter
+              </Button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-center h-20 text-xs text-muted-foreground">
+              Drag leads here
+            </div>
+          )
         )}
-      </Droppable>
+
+        {visibleLeads.length > 0 && hiddenCount > 0 && (
+          <button
+            type="button"
+            onClick={() => setDateFilter(NO_DATE_FILTER)}
+            className="w-full rounded-md border border-dashed py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            {hiddenCount} hidden by date · Clear
+          </button>
+        )}
+      </div>
     </div>
   );
 };

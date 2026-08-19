@@ -30,7 +30,7 @@ export default defineConfig(({ mode }) => ({
           'vendor-charts': ['recharts'],
           'vendor-forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
           'vendor-query': ['@tanstack/react-query'],
-          'vendor-dnd': ['@hello-pangea/dnd'],
+          'vendor-dnd': ['@hello-pangea/dnd', '@dnd-kit/core'],
           'vendor-http': ['axios'],
         },
       },
