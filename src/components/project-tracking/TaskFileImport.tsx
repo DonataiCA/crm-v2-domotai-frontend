@@ -189,12 +189,16 @@ export const TaskFileImport = ({ projectId, onTasksImported }: TaskFileImportPro
             área, responsable, estado, prioridad, fechas, descripción y conclusión, igual
             que si la crearas a mano.
           </p>
-          <a href={TEMPLATE_URL} download className="inline-block">
-            <Button variant="outline" size="sm" className="h-8 gap-1.5">
+          {/* `asChild`, y no un <Button> dentro de un <a>: un <button> anidado en un
+              enlace es el elemento activable más cercano, así que se queda el clic y el
+              enlace no llega a navegar — el botón parece muerto. Con `asChild` el propio
+              Button ES el <a>, que es lo que descarga. */}
+          <Button asChild variant="outline" size="sm" className="h-8 gap-1.5">
+            <a href={TEMPLATE_URL} download="plantilla-tareas.md">
               <Download className="h-3.5 w-3.5" />
               Descargar plantilla
-            </Button>
-          </a>
+            </a>
+          </Button>
         </div>
 
         {/* Zona de subida. El arrastre no puede ser la única forma de entrar. */}
