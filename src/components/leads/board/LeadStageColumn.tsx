@@ -88,7 +88,7 @@ export const LeadStageColumn = ({
   const totalValue = visibleLeads.reduce((sum, lead) => sum + (lead.price || 0), 0);
 
   return (
-    <div className={isMobile ? "w-full" : "w-[300px] shrink-0 flex flex-col h-full"}>
+    <div className={isMobile ? "w-full" : "w-[300px] shrink-0 flex flex-col"}>
       {/* Stage Header */}
       <div className={`rounded-t-xl border-t-[3px] ${colors.border} bg-card p-3 shrink-0`}>
         <div className="flex items-center justify-between gap-2">
@@ -111,13 +111,13 @@ export const LeadStageColumn = ({
         )}
       </div>
 
-      {/* Drop Zone. Cada columna scrollea por su cuenta: @dnd-kit vuelve a medir las
-          zonas de drop durante el arrastre y su auto-scroll recorre todos los
-          ancestros scrolleables, así que este `overflow-y-auto` conviviendo con el
-          scroll horizontal del tablero ya no rompe nada. */}
+      {/* Drop Zone. Sin scroll propio: la columna crece con sus tarjetas y quien
+          scrollea es la página. `flex-1` la estira hasta la altura de la columna más
+          larga para que el fondo llegue abajo, y `min-h` deja una zona de drop cómoda
+          en las columnas vacías. */}
       <div
         ref={setNodeRef}
-        className={`flex-1 min-h-0 rounded-b-xl p-2 space-y-2 overflow-y-auto transition-colors border border-t-0 ${
+        className={`flex-1 min-h-[140px] rounded-b-xl p-2 space-y-2 transition-colors border border-t-0 ${
           isOver
             ? `${colors.bg} border-dashed ${colors.border}`
             : 'bg-muted/20 border-border'

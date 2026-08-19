@@ -317,16 +317,16 @@ export const LeadBoard = ({ pipeline }: LeadBoardProps) => {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveLeadId(null)}
       >
-        <div
-          className={isMobile ? 'flex flex-col gap-3 pb-4' : 'flex-1 min-h-0 overflow-x-auto overflow-y-hidden'}
-        >
+        <div className={isMobile ? 'flex flex-col gap-3' : 'overflow-x-auto pb-2'}>
           {isMobile ? (
             columns
           ) : (
-            // `h-full` da a las columnas una altura definida, que es lo que permite
-            // que su cuerpo scrollee por dentro; `w-max` las desliga del ancho del
-            // tablero para que el scroll horizontal sea del track, no de la página.
-            <div className="flex gap-3 h-full w-max">{columns}</div>
+            // Sin altura impuesta: el track mide lo que mida la columna más larga y es
+            // la página la que scrollea. `w-max` lo desliga del ancho disponible para
+            // que el desbordamiento horizontal sea suyo y no de la página; con
+            // `items-stretch` todas las columnas llegan a la misma altura y los fondos
+            // quedan parejos.
+            <div className="flex gap-3 items-stretch w-max">{columns}</div>
           )}
         </div>
 

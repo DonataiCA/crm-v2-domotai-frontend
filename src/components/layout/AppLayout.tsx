@@ -9,7 +9,6 @@ import { CommercialAgent } from "@/components/ai/CommercialAgent";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "react-router-dom";
 import { isClientRole } from "@/constants";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -20,17 +19,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { userRole } = useAuth();
   const location = useLocation();
-  const isMobile = useIsMobile();
   // Only show the AI agent for internal team members, not clients
   const isTeamMember = Boolean(userRole) && !isClientRole(userRole);
   // Hide CommercialAgent on project tracking pages — those pages have their own AI chat
   const isProjectTracking = location.pathname.includes('/tracking');
-  // El tablero de leads necesita altura real para que las columnas se lleven todo el
-  // alto sobrante, en vez de un `calc()` que adivina lo que tienen encima. Los márgenes
-  // laterales son los mismos que en el resto de páginas. Sólo `/leads` (el detalle
-  // `/leads/:id` es una página normal) y sólo en escritorio: en móvil las columnas se
-  // apilan y la página scrollea como siempre.
-  const isFullHeightBoard = location.pathname === '/leads' && !isMobile;
 
   return (
     <div className="min-h-screen bg-background">
@@ -44,10 +36,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {/* Main content area */}
       <div
         className={cn(
-          "flex flex-col transition-all duration-300 ease-in-out",
-          // Altura fija sólo en el tablero: es lo que hace que `flex-1` tenga contra qué
-          // resolverse. El resto de páginas siguen creciendo con su contenido.
-          isFullHeightBoard ? "h-screen" : "min-h-screen",
+          "flex min-h-screen flex-col transition-all duration-300 ease-in-out",
           collapsed ? "md:ml-[72px]" : "md:ml-64"
         )}
       >
@@ -74,15 +63,8 @@ export function AppLayout({ children }: AppLayoutProps) {
         </header>
 
         {/* Page content */}
-        <main className={cn("flex-1", isFullHeightBoard ? "min-h-0 overflow-hidden" : "overflow-y-auto")}>
-          <div
-            className={cn(
-              "container mx-auto py-6",
-              isFullHeightBoard && "flex h-full min-h-0 flex-col"
-            )}
-          >
-            {children}
-          </div>
+        <main className="flex-1 overflow-y-auto">
+          <div className="container mx-auto py-6">{children}</div>
         </main>
       </div>
 

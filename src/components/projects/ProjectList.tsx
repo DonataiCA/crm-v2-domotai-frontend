@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { useState } from "react";
-import { ProjectDetailsDialog } from "./ProjectDetailsDialog";
+import { ProjectEditDialog } from "./ProjectEditDialog";
 import { Button } from "../ui/button";
 import { Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -210,13 +210,10 @@ export const ProjectList = () => {
         </div>
       )}
 
-      <ProjectDetailsDialog
+      <ProjectEditDialog
         project={selectedProject}
         open={isDetailsOpen}
         onOpenChange={setIsDetailsOpen}
-        onProjectUpdate={(updatedProject) => {
-          setSelectedProject(updatedProject);
-        }}
       />
 
       <ConfirmDialog

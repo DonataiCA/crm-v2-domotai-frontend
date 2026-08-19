@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ProjectForm } from "@/components/projects/ProjectForm";
-import { ProjectDetailsDialog } from "@/components/projects/ProjectDetailsDialog";
+import { ProjectEditDialog } from "@/components/projects/ProjectEditDialog";
 import { useToast } from "@/hooks/use-toast";
 import { projectService } from "@/services/project.service";
 import { monitorService } from "@/services/monitor.service";
@@ -351,15 +351,15 @@ const ProjectDashboard = () => {
           projects={paginatedProjects}
           visibleColumns={visibleColumns}
           monitorData={monitorMap}
-          onProjectClick={(project) => {
-            if (isClient) {
-              navigate(`/projects/${project.id}/tracking`);
-            } else {
-              setSelectedProject(project);
-              setIsDetailsOpen(true);
-            }
+          // Click en la fila = ir al seguimiento, para todos. Antes el equipo se
+          // encontraba un modal intermedio cuya única acción era este mismo salto,
+          // mientras que el cliente ya venía directo aquí.
+          onProjectClick={(project) => navigate(`/projects/${project.id}/tracking`)}
+          // El lápiz sólo se pasa al equipo: sin la prop, la tabla no lo pinta.
+          onEditClick={isClient ? undefined : (project) => {
+            setSelectedProject(project);
+            setIsDetailsOpen(true);
           }}
-          onTrackClick={(project) => navigate(`/projects/${project.id}/tracking`)}
           onMonitorClick={(project) => navigate(`/projects/${project.id}/monitor`)}
         />
       )}
@@ -397,11 +397,10 @@ const ProjectDashboard = () => {
       )}
 
       {/* Detail Dialog */}
-      <ProjectDetailsDialog
+      <ProjectEditDialog
         project={selectedProject}
         open={isDetailsOpen}
         onOpenChange={setIsDetailsOpen}
-        onProjectUpdate={(updated) => setSelectedProject(updated)}
       />
     </>
   );

@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { DollarSign, Calendar, ExternalLink, Eye, Activity } from "lucide-react";
+import { DollarSign, Calendar, ExternalLink, Pencil, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { format } from "date-fns";
 import type { Project, ContactRef } from "@/types/api";
@@ -58,7 +58,8 @@ interface ProjectDataTableProps {
   projects: Project[];
   visibleColumns: Set<ProjectColumnKey>;
   onProjectClick?: (project: Project) => void;
-  onTrackClick?: (project: Project) => void;
+  /** Sólo se pasa a quien puede editar; sin él, el lápiz no se pinta. */
+  onEditClick?: (project: Project) => void;
   onMonitorClick?: (project: Project) => void;
   monitorData?: Map<string, ProjectMonitorSummary>;
 }
@@ -68,7 +69,7 @@ export const ProjectDataTable = ({
   projects,
   visibleColumns,
   onProjectClick,
-  onTrackClick,
+  onEditClick,
   onMonitorClick,
   monitorData,
 }: ProjectDataTableProps) => {
@@ -267,21 +268,23 @@ export const ProjectDataTable = ({
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-7 px-2"
-                          onClick={(e) => { e.stopPropagation(); onTrackClick?.(project); }}
-                        >
-                          <Eye className="h-3.5 w-3.5 mr-1" />
-                          Track
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
                           className="h-7 px-2 text-muted-foreground hover:text-foreground"
                           onClick={(e) => { e.stopPropagation(); onMonitorClick?.(project); }}
                           title="Monitor de producción"
                         >
                           <Activity className="h-3.5 w-3.5" />
                         </Button>
+                        {onEditClick && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-muted-foreground hover:text-foreground"
+                            onClick={(e) => { e.stopPropagation(); onEditClick(project); }}
+                            title="Editar proyecto"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </motion.tr>
