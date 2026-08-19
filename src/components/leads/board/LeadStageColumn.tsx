@@ -49,9 +49,11 @@ export const LeadStageColumn = ({
   const totalValue = leads.reduce((sum, lead) => sum + (lead.price || 0), 0);
 
   return (
-    <div className={isMobile ? "w-full" : "w-[300px] shrink-0 flex flex-col min-h-0"}>
-      {/* Stage Header */}
-      <div className={`rounded-t-xl border-t-[3px] ${colors.border} bg-card p-3 shrink-0`}>
+    <div className={isMobile ? "w-full" : "w-[300px] shrink-0 flex flex-col"}>
+      {/* Stage Header. `sticky` lo mantiene a la vista mientras el tablero
+          scrollea en vertical; `bg-card` es opaco, que es lo que impide que las
+          tarjetas se transparenten por detrás al pasar. */}
+      <div className={`sticky top-0 z-10 rounded-t-xl border-t-[3px] ${colors.border} bg-card p-3 shrink-0`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className={`h-2 w-2 rounded-full ${colors.dot}`} />
@@ -69,13 +71,21 @@ export const LeadStageColumn = ({
         )}
       </div>
 
-      {/* Drop Zone */}
+      {/* Drop Zone.
+          Este div NO puede llevar `overflow-y-auto`. @hello-pangea/dnd busca el
+          contenedor de scroll de cada Droppable empezando por el propio elemento
+          (`get-closest-scrollable.ts`) y se queda con el primero que encuentra: si
+          este scrollea, la búsqueda termina aquí y el scroll horizontal del tablero
+          nunca se registra, así que al scrollear para alcanzar una columna lejana
+          las medidas del arrastre quedan obsoletas y el drop se pierde. Dejándolo
+          sin overflow, el contenedor pasa a ser el tablero y la librería lo
+          trackea y lo auto-scrollea en ambos ejes por su cuenta. */}
       <Droppable droppableId={stage.value}>
         {(provided, snapshot) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`flex-1 rounded-b-xl p-2 space-y-2 overflow-y-auto transition-colors border border-t-0 ${
+            className={`flex-1 rounded-b-xl p-2 space-y-2 transition-colors border border-t-0 ${
               snapshot.isDraggingOver
                 ? `${colors.bg} border-dashed ${colors.border}`
                 : 'bg-muted/20 border-border'
@@ -84,15 +94,23 @@ export const LeadStageColumn = ({
             {leads.map((lead, index) => (
               <Draggable key={lead.id} draggableId={lead.id} index={index}>
                 {(provided, snapshot) => (
+                  // La inclinación va en un div interno, no en el que recibe los
+                  // draggableProps: la librería reescribe el `transform` de ese
+                  // elemento en cada frame, así que ahí las clases de transform no
+                  // se ven y `transition-transform` sólo consigue que la tarjeta
+                  // vaya por detrás del cursor.
                   <div
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
-                    className={`transition-transform ${
-                      snapshot.isDragging ? 'rotate-[2deg] scale-105 shadow-lg' : ''
-                    }`}
                   >
-                    <LeadCard lead={lead} refetch={onUpdate} />
+                    <div
+                      className={`transition-transform ${
+                        snapshot.isDragging ? 'rotate-[2deg] scale-105 shadow-lg' : ''
+                      }`}
+                    >
+                      <LeadCard lead={lead} refetch={onUpdate} />
+                    </div>
                   </div>
                 )}
               </Draggable>
