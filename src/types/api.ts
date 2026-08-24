@@ -615,6 +615,40 @@ export interface ImportTasksResponse {
   warnings?: TemplateIssue[];
 }
 
+// ─── Cobranzas ──────────────────────────────────────────────────────────────
+
+/**
+ * Estado de cobro. No es una columna: el backend lo deriva del vencimiento, de la
+ * fecha de pago y del margen de gracia, así que aquí sólo se muestra.
+ */
+export type CollectionStatus = 'PAID' | 'DUE' | 'OVERDUE';
+
+export interface CollectionRow {
+  id: string;
+  invoiceNumber: string | null;
+  /** Qué se le cobra: la primera línea de la factura, o el proyecto si no tiene. */
+  service: string | null;
+  dueDate: string | null;
+  paidAt: string | null;
+  total: number | null;
+  currency: string | null;
+  status: string;
+  collectionStatus: CollectionStatus;
+  contact: ContactRef | null;
+  project: ProjectRef | null;
+}
+
+export interface CollectionSummary {
+  /** Cobros que vencen este mes: el denominador del «10/40». */
+  dueThisMonth: number;
+  /** De esos, los ya cobrados: el numerador. */
+  paidThisMonth: number;
+  /** Morosos, sin limitar al mes: una deuda de marzo sigue siendo deuda. */
+  overdue: number;
+  overdueAmount: number;
+  pendingAmount: number;
+}
+
 // ─── Calendar Event ─────────────────────────────────────────────────────────
 
 export interface CalendarEvent {

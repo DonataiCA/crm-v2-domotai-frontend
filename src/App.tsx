@@ -10,6 +10,7 @@ import ProjectDashboard from "./pages/ProjectDashboard";
 import ProjectTracking from "./pages/ProjectTracking";
 import Tasks from "./pages/Tasks";
 import Invoices from "./pages/Invoices";
+import Collections from "./pages/Collections";
 import TimeTracking from "./pages/TimeTracking";
 import FinancialDashboard from "./pages/FinancialDashboard";
 import Calendar from "./pages/Calendar";
@@ -139,6 +140,10 @@ const AppRoutes = () => {
       <Route
         path="/invoices"
         element={session ? <WithLayout><TeamOnly><Invoices /></TeamOnly></WithLayout> : <NavToAuth />}
+      />
+      <Route
+        path="/collections"
+        element={session ? <WithLayout><TeamOnly><Collections /></TeamOnly></WithLayout> : <NavToAuth />}
       />
       <Route
         path="/time-tracking"
