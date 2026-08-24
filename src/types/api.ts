@@ -638,6 +638,27 @@ export interface CalendarEvent {
   creator: UserRef | null;
 }
 
+/**
+ * Hito derivado de un proyecto o de una fase. No vive en `calendar_events`: el
+ * backend lo calcula en cada consulta de `/calendar/overview`, así que es de
+ * sólo lectura — se edita desde el proyecto, no desde el calendario.
+ */
+export interface CalendarMilestone {
+  kind: 'project-start' | 'project-end' | 'phase-start' | 'phase-end';
+  refId: string;
+  projectId: string;
+  title: string;
+  projectName: string;
+  status: string | null;
+  date: string;
+}
+
+export interface CalendarOverview {
+  events: CalendarEvent[];
+  projects: CalendarMilestone[];
+  phases: CalendarMilestone[];
+}
+
 // ─── Audit Log ──────────────────────────────────────────────────────────────
 
 export interface AuditLog {

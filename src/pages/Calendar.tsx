@@ -1,4 +1,5 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +14,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Select,
   SelectContent,
@@ -36,9 +46,18 @@ import {
   CalendarDays,
   CheckSquare,
   FileText,
+  Filter,
+  Search,
+  FolderKanban,
+  Layers,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import type { CalendarEvent, Contact, Project } from "@/types/api";
+import type {
+  CalendarEvent,
+  CalendarMilestone,
+  Contact,
+  Project,
+} from "@/types/api";
 
 const PRESET_COLORS = [
   { label: "Blue", value: "#3b82f6" },
@@ -50,6 +69,91 @@ const PRESET_COLORS = [
 ];
 
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// ─── Fuentes del calendario ─────────────────────────────────────────────────
+// Los proyectos y las fases son hitos derivados: el backend los calcula en
+// `/calendar/overview` y aquí son de sólo lectura. Las tareas de proyecto
+// quedan deliberadamente fuera — saturarían la grilla.
+
+type SourceKey = "event" | "project" | "phase" | "task" | "invoice";
+
+const SOURCES: Array<{ key: SourceKey; label: string }> = [
+  { key: "event", label: "Eventos" },
+  { key: "project", label: "Proyectos" },
+  { key: "phase", label: "Fases" },
+  { key: "task", label: "Tareas" },
+  { key: "invoice", label: "Facturas" },
+];
+
+const ALL_SOURCES = SOURCES.map((s) => s.key);
+
+/**
+ * Todo lo que se pinta en un día, venga de donde venga. Unificar las cinco
+ * fuentes en una sola forma evita que cada vista (mes, semana y panel lateral)
+ * tenga que cruzar estructuras distintas.
+ */
+type DayItem = {
+  source: SourceKey;
+  key: string;
+  title: string;
+  dateKey: string;
+  /** Orden dentro del día: menor primero. */
+  sortKey: number;
+  color?: string | null;
+  projectId?: string | null;
+  /** Texto de apoyo para el tooltip y el panel lateral. */
+  subtitle: string;
+  /** Presente sólo cuando `source === 'event'`: el panel permite borrarlo. */
+  event?: CalendarEvent;
+  milestone?: CalendarMilestone;
+};
+
+/** Estilos de las fuentes de sólo lectura. Los eventos usan su color propio. */
+const SOURCE_STYLES: Record<
+  Exclude<SourceKey, "event">,
+  { chip: string; panel: string; text: string }
+> = {
+  project: {
+    chip: "bg-sky-100 text-sky-700",
+    panel: "border-sky-200 bg-sky-50",
+    text: "text-sky-600",
+  },
+  phase: {
+    chip: "bg-emerald-100 text-emerald-700",
+    panel: "border-emerald-200 bg-emerald-50",
+    text: "text-emerald-600",
+  },
+  task: {
+    chip: "bg-violet-100 text-violet-700",
+    panel: "border-violet-200 bg-violet-50",
+    text: "text-violet-600",
+  },
+  invoice: {
+    chip: "bg-amber-100 text-amber-700",
+    panel: "border-amber-200 bg-amber-50",
+    text: "text-amber-600",
+  },
+};
+
+function sourceIcon(source: SourceKey, className: string) {
+  switch (source) {
+    case "project":
+      return <FolderKanban className={className} />;
+    case "phase":
+      return <Layers className={className} />;
+    case "task":
+      return <CheckSquare className={className} />;
+    case "invoice":
+      return <FileText className={className} />;
+    default:
+      return null;
+  }
+}
+
+/** ▶ arranca, ■ termina. */
+function milestoneGlyph(kind: CalendarMilestone["kind"]) {
+  return kind.endsWith("-start") ? "▶" : "■";
+}
 
 function getDaysInMonth(year: number, month: number) {
   return new Date(year, month + 1, 0).getDate();
@@ -65,6 +169,7 @@ function toDateKey(d: Date): string {
 
 const Calendar = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { currentOrganization } = useOrganization();
 
@@ -79,6 +184,11 @@ const Calendar = () => {
   const [addEventOpen, setAddEventOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // Filtros
+  const [activeSources, setActiveSources] = useState<SourceKey[]>(ALL_SOURCES);
+  const [projectFilter, setProjectFilter] = useState<string[]>([]);
+  const [search, setSearch] = useState("");
+
   // Form state
   const [formTitle, setFormTitle] = useState("");
   const [formDescription, setFormDescription] = useState("");
@@ -92,16 +202,72 @@ const Calendar = () => {
   const [formLeadId, setFormLeadId] = useState("");
   const [formProjectId, setFormProjectId] = useState("");
 
-  // Calculate date range for query
-  const dateFrom = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-01`;
-  const lastDay = getDaysInMonth(viewYear, viewMonth);
-  const dateTo = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  // ─── Persistencia de los filtros por organización ─────────────────────────
+  const filtersKey = currentOrganization ? `calendar-filters:${currentOrganization.id}` : null;
 
-  const { data: events = [], isLoading, error } = useQuery({
-    queryKey: ["calendar-events", currentOrganization?.id, dateFrom, dateTo],
-    queryFn: () => calendarService.getEvents({ dateFrom, dateTo }),
+  useEffect(() => {
+    if (!filtersKey) return;
+    try {
+      const raw = localStorage.getItem(filtersKey);
+      const saved = raw ? JSON.parse(raw) : null;
+      setActiveSources(
+        Array.isArray(saved?.sources)
+          ? saved.sources.filter((s: string) => ALL_SOURCES.includes(s as SourceKey))
+          : ALL_SOURCES,
+      );
+      setProjectFilter(Array.isArray(saved?.projects) ? saved.projects : []);
+    } catch {
+      // Un localStorage corrupto no debe dejar la página sin filtros.
+      setActiveSources(ALL_SOURCES);
+      setProjectFilter([]);
+    }
+  }, [filtersKey]);
+
+  useEffect(() => {
+    if (!filtersKey) return;
+    localStorage.setItem(
+      filtersKey,
+      JSON.stringify({ sources: activeSources, projects: projectFilter }),
+    );
+  }, [filtersKey, activeSources, projectFilter]);
+
+  const toggleSource = (key: SourceKey) =>
+    setActiveSources((prev) =>
+      prev.includes(key) ? prev.filter((s) => s !== key) : [...prev, key],
+    );
+
+  const toggleProject = (id: string) =>
+    setProjectFilter((prev) =>
+      prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id],
+    );
+
+  // ─── Rango consultado ─────────────────────────────────────────────────────
+  // La semana visible puede caer fuera del mes seleccionado, así que el rango
+  // sigue a la vista activa y no siempre al mes.
+  const weekDays = useMemo(() => {
+    const days = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart);
+      d.setDate(d.getDate() + i);
+      days.push(d);
+    }
+    return days;
+  }, [weekStart]);
+
+  const monthFrom = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-01`;
+  const monthTo = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(getDaysInMonth(viewYear, viewMonth)).padStart(2, "0")}`;
+  const dateFrom = viewMode === 'week' ? toDateKey(weekDays[0]) : monthFrom;
+  const dateTo = viewMode === 'week' ? toDateKey(weekDays[6]) : monthTo;
+
+  // Se piden siempre todas las fuentes: apagar una es un filtro de cliente, así
+  // que marcar y desmarcar no dispara refetch.
+  const { data: overview, isLoading, error } = useQuery({
+    queryKey: ["calendar-overview", currentOrganization?.id, dateFrom, dateTo],
+    queryFn: () => calendarService.getOverview({ dateFrom, dateTo }),
     enabled: !!currentOrganization,
   });
+
+  const events = useMemo(() => overview?.events ?? [], [overview]);
 
   const { data: contactsData } = useQuery({
     queryKey: ["contacts-list", currentOrganization?.id],
@@ -132,38 +298,96 @@ const Calendar = () => {
     enabled: !!currentOrganization,
   });
 
-  // Due-date events: tasks + invoices indexed by YYYY-MM-DD
-  const dueDatesByDate = useMemo(() => {
-    const map: Record<string, Array<{ type: 'task' | 'invoice'; id: string; title: string; status: string }>> = {};
+  // ─── Las cinco fuentes normalizadas a DayItem ─────────────────────────────
+  const allItems = useMemo(() => {
+    const items: DayItem[] = [];
+
+    for (const evt of events) {
+      const d = new Date(evt.startDate);
+      items.push({
+        source: "event",
+        key: `event-${evt.id}`,
+        title: evt.title,
+        dateKey: toDateKey(d),
+        // Los que tienen hora van primero; los de todo el día, después.
+        sortKey: evt.allDay ? 2000 : d.getHours() * 60 + d.getMinutes(),
+        color: evt.color,
+        projectId: evt.projectId,
+        subtitle: evt.title,
+        event: evt,
+      });
+    }
+
+    for (const [source, list] of [
+      ["project", overview?.projects ?? []],
+      ["phase", overview?.phases ?? []],
+    ] as Array<[Extract<SourceKey, "project" | "phase">, CalendarMilestone[]]>) {
+      for (const m of list) {
+        const starts = m.kind.endsWith("-start");
+        const entidad = source === "project" ? "proyecto" : "fase";
+        items.push({
+          source,
+          key: `${m.kind}-${m.refId}`,
+          title: m.title,
+          dateKey: toDateKey(new Date(m.date)),
+          sortKey: 3000,
+          projectId: m.projectId,
+          subtitle:
+            source === "phase"
+              ? `${starts ? "Inicia" : "Termina"} la fase ${m.title} de ${m.projectName}`
+              : `${starts ? "Inicia" : "Termina"} el ${entidad} ${m.title}`,
+          milestone: m,
+        });
+      }
+    }
 
     for (const task of tasksData?.data || []) {
       if (!task.dueDate || task.status === 'COMPLETED') continue;
-      const key = task.dueDate.slice(0, 10);
-      if (!map[key]) map[key] = [];
-      map[key].push({ type: 'task', id: task.id, title: task.title, status: task.status });
+      items.push({
+        source: "task",
+        key: `task-${task.id}`,
+        title: task.title,
+        dateKey: task.dueDate.slice(0, 10),
+        sortKey: 4000,
+        projectId: task.projectId,
+        subtitle: "Tarea vence hoy",
+      });
     }
 
     for (const inv of invoicesData?.data || []) {
       if (!inv.dueDate || inv.status === 'PAID' || inv.status === 'CANCELLED') continue;
-      const key = inv.dueDate.slice(0, 10);
-      if (!map[key]) map[key] = [];
-      map[key].push({ type: 'invoice', id: inv.id, title: inv.invoiceNumber, status: inv.status });
+      items.push({
+        source: "invoice",
+        key: `invoice-${inv.id}`,
+        title: inv.invoiceNumber,
+        dateKey: inv.dueDate.slice(0, 10),
+        sortKey: 4001,
+        projectId: inv.projectId,
+        subtitle: `Factura ${inv.status} vence hoy`,
+      });
     }
 
-    return map;
-  }, [tasksData, invoicesData]);
+    return items;
+  }, [events, overview, tasksData, invoicesData]);
 
-  // Group events by date
-  const eventsByDate = useMemo(() => {
-    const map: Record<string, CalendarEvent[]> = {};
-    for (const evt of events) {
-      const d = new Date(evt.startDate);
-      const key = toDateKey(d);
-      if (!map[key]) map[key] = [];
-      map[key].push(evt);
+  const itemsByDate = useMemo(() => {
+    const sources = new Set(activeSources);
+    const wantedProjects = new Set(projectFilter);
+    const needle = search.trim().toLowerCase();
+
+    const map: Record<string, DayItem[]> = {};
+    for (const item of allItems) {
+      if (!sources.has(item.source)) continue;
+      // Un filtro de proyectos vacío significa "todos".
+      if (wantedProjects.size && !(item.projectId && wantedProjects.has(item.projectId))) continue;
+      if (needle && !item.title.toLowerCase().includes(needle)) continue;
+      (map[item.dateKey] ||= []).push(item);
+    }
+    for (const key of Object.keys(map)) {
+      map[key].sort((a, b) => a.sortKey - b.sortKey);
     }
     return map;
-  }, [events]);
+  }, [allItems, activeSources, projectFilter, search]);
 
   // Build calendar grid
   const calendarGrid = useMemo(() => {
@@ -193,17 +417,6 @@ const Calendar = () => {
     month: "long",
     year: "numeric",
   });
-
-  // Week view helpers
-  const weekDays = useMemo(() => {
-    const days = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(weekStart);
-      d.setDate(d.getDate() + i);
-      days.push(d);
-    }
-    return days;
-  }, [weekStart]);
 
   const weekLabel = `${weekDays[0].toLocaleDateString("en-US", { month: "short", day: "numeric" })} — ${weekDays[6].toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`;
 
@@ -282,7 +495,7 @@ const Calendar = () => {
       toast({ title: "Event created" });
       setAddEventOpen(false);
       resetForm();
-      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-overview"] });
     } catch (err: any) {
       toast({
         title: "Error creating event",
@@ -298,13 +511,24 @@ const Calendar = () => {
     try {
       await calendarService.deleteEvent(eventId);
       toast({ title: "Event deleted" });
-      queryClient.invalidateQueries({ queryKey: ["calendar-events"] });
+      queryClient.invalidateQueries({ queryKey: ["calendar-overview"] });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
   };
 
-  const selectedEvents = selectedDate ? eventsByDate[selectedDate] || [] : [];
+  /**
+   * Los hitos son de sólo lectura: se editan en el proyecto, no aquí. `/projects/:id`
+   * no existe como ruta (redirige al dashboard); el seguimiento es la vista que
+   * muestra fases y fechas.
+   */
+  const openItem = (item: DayItem) => {
+    if ((item.source === "project" || item.source === "phase") && item.projectId) {
+      navigate(`/projects/${item.projectId}/tracking`);
+    }
+  };
+
+  const selectedItems = selectedDate ? itemsByDate[selectedDate] || [] : [];
 
   if (!currentOrganization) {
     return (
@@ -314,6 +538,52 @@ const Calendar = () => {
       </div>
     );
   }
+
+  /** Chip de un ítem dentro de una celda de la grilla. */
+  const ItemChip = ({ item, compact }: { item: DayItem; compact?: boolean }) => {
+    const readOnly = item.source === "project" || item.source === "phase";
+    const iconSize = compact ? "h-2 w-2" : "h-2.5 w-2.5";
+
+    if (item.source === "event") {
+      return (
+        <div
+          className={cn(
+            "truncate rounded px-1 py-0.5 font-medium text-white leading-tight",
+            compact ? "text-[10px]" : "text-[11px]",
+          )}
+          style={{ backgroundColor: item.color || "#3b82f6" }}
+          title={item.title}
+        >
+          {item.title}
+        </div>
+      );
+    }
+
+    return (
+      <div
+        role={readOnly ? "button" : undefined}
+        onClick={(e) => {
+          if (!readOnly) return;
+          // Sin esto, el clic burbujea a la celda y abre el diálogo de crear.
+          e.stopPropagation();
+          openItem(item);
+        }}
+        className={cn(
+          "truncate rounded px-1 py-0.5 font-medium leading-tight flex items-center gap-0.5",
+          compact ? "text-[10px]" : "text-[11px]",
+          SOURCE_STYLES[item.source].chip,
+          readOnly && "hover:underline cursor-pointer",
+        )}
+        title={item.subtitle}
+      >
+        {item.milestone && <span className="shrink-0">{milestoneGlyph(item.milestone.kind)}</span>}
+        {sourceIcon(item.source, `${iconSize} shrink-0`)}
+        <span className="truncate">{item.title}</span>
+      </div>
+    );
+  };
+
+  const activeFilterCount = activeSources.length;
 
   return (
     <>
@@ -327,6 +597,92 @@ const Calendar = () => {
           <Plus className="h-4 w-4 mr-2" />
           Add Event
         </Button>
+      </div>
+
+      {/* Barra de filtros */}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Filter className="h-4 w-4 mr-2" />
+              Fuentes
+              <Badge variant="secondary" className="ml-2">
+                {activeFilterCount}/{SOURCES.length}
+              </Badge>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            <DropdownMenuLabel>Mostrar en el calendario</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {SOURCES.map((s) => (
+              <DropdownMenuCheckboxItem
+                key={s.key}
+                checked={activeSources.includes(s.key)}
+                onCheckedChange={() => toggleSource(s.key)}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {s.label}
+              </DropdownMenuCheckboxItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => setActiveSources(ALL_SOURCES)}>
+              Mostrar todo
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              <FolderKanban className="h-4 w-4 mr-2" />
+              Proyectos
+              {projectFilter.length > 0 && (
+                <Badge variant="secondary" className="ml-2">{projectFilter.length}</Badge>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start" className="max-h-80 overflow-y-auto">
+            <DropdownMenuLabel>Acotar a proyectos</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {projects.length === 0 && (
+              <DropdownMenuItem disabled>No hay proyectos</DropdownMenuItem>
+            )}
+            {projects.map((p) => (
+              <DropdownMenuCheckboxItem
+                key={p.id}
+                checked={projectFilter.includes(p.id)}
+                onCheckedChange={() => toggleProject(p.id)}
+                onSelect={(e) => e.preventDefault()}
+              >
+                {p.name}
+              </DropdownMenuCheckboxItem>
+            ))}
+            {projectFilter.length > 0 && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setProjectFilter([])}>
+                  Quitar el filtro
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por título..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8 h-9 w-56"
+          />
+        </div>
+
+        {projectFilter.length > 0 && (
+          <span className="text-xs text-muted-foreground">
+            Acotado a {projectFilter.length} proyecto{projectFilter.length > 1 ? "s" : ""}
+          </span>
+        )}
       </div>
 
       {/* Calendar + Event Panel */}
@@ -394,6 +750,30 @@ const Calendar = () => {
                     );
                   })}
                 </div>
+                {/* Fila sin hora: hitos, eventos de todo el día y vencimientos.
+                    Nada de esto tiene hora, así que no cabe en un slot. */}
+                <div className="grid grid-cols-[60px_repeat(7,1fr)] border-b bg-slate-50/50">
+                  <div className="p-1 text-[11px] text-muted-foreground text-right pr-2">
+                    Todo el día
+                  </div>
+                  {weekDays.map((d, di) => {
+                    const key = toDateKey(d);
+                    const untimed = (itemsByDate[key] || []).filter(
+                      (i) => i.source !== "event" || i.event?.allDay,
+                    );
+                    return (
+                      <div
+                        key={di}
+                        className="border-l p-0.5 min-h-[32px] cursor-pointer hover:bg-slate-50 space-y-0.5"
+                        onClick={() => { setSelectedDate(key); openAddEvent(key); }}
+                      >
+                        {untimed.map((item) => (
+                          <ItemChip key={item.key} item={item} />
+                        ))}
+                      </div>
+                    );
+                  })}
+                </div>
                 {/* Time slots */}
                 <div className="max-h-[500px] overflow-y-auto">
                   {HOURS.map(hour => (
@@ -403,10 +783,9 @@ const Calendar = () => {
                       </div>
                       {weekDays.map((d, di) => {
                         const key = toDateKey(d);
-                        const dayEvts = (eventsByDate[key] || []).filter(evt => {
-                          if (evt.allDay) return hour === 8;
-                          const h = new Date(evt.startDate).getHours();
-                          return h === hour;
+                        const dayEvts = (itemsByDate[key] || []).filter(item => {
+                          if (item.source !== "event" || item.event?.allDay) return false;
+                          return new Date(item.event!.startDate).getHours() === hour;
                         });
                         return (
                           <div
@@ -414,15 +793,8 @@ const Calendar = () => {
                             className="border-l border-t p-0.5 cursor-pointer hover:bg-slate-50 relative"
                             onClick={() => { setSelectedDate(key); openAddEvent(key); }}
                           >
-                            {dayEvts.map(evt => (
-                              <div
-                                key={evt.id}
-                                className="truncate rounded px-1.5 py-0.5 text-[11px] font-medium text-white mb-0.5"
-                                style={{ backgroundColor: evt.color || '#3b82f6' }}
-                                title={evt.title}
-                              >
-                                {evt.title}
-                              </div>
+                            {dayEvts.map((item) => (
+                              <ItemChip key={item.key} item={item} />
                             ))}
                           </div>
                         );
@@ -445,11 +817,10 @@ const Calendar = () => {
                 ))}
                 {/* Day cells */}
                 {calendarGrid.map((cell, idx) => {
-                  const dayEvents = cell.dateKey ? eventsByDate[cell.dateKey] || [] : [];
-                  const dayDueDates = cell.dateKey ? dueDatesByDate[cell.dateKey] || [] : [];
+                  const dayItems = cell.dateKey ? itemsByDate[cell.dateKey] || [] : [];
                   const isToday = cell.dateKey === todayKey;
                   const isSelected = cell.dateKey === selectedDate;
-                  const totalShown = dayEvents.length + dayDueDates.length;
+                  const hidden = dayItems.length - 3;
                   return (
                     <div
                       key={idx}
@@ -473,37 +844,12 @@ const Calendar = () => {
                             {cell.day}
                           </span>
                           <div className="mt-0.5 space-y-0.5">
-                            {dayEvents.slice(0, 2).map((evt) => (
-                              <div
-                                key={evt.id}
-                                className="truncate rounded px-1 py-0.5 text-[10px] font-medium text-white leading-tight"
-                                style={{ backgroundColor: evt.color || "#3b82f6" }}
-                                title={evt.title}
-                              >
-                                {evt.title}
-                              </div>
+                            {dayItems.slice(0, 3).map((item) => (
+                              <ItemChip key={item.key} item={item} compact />
                             ))}
-                            {dayDueDates.slice(0, 2).map((item) => (
-                              <div
-                                key={`${item.type}-${item.id}`}
-                                className={cn(
-                                  "truncate rounded px-1 py-0.5 text-[10px] font-medium leading-tight flex items-center gap-0.5",
-                                  item.type === 'task'
-                                    ? "bg-violet-100 text-violet-700"
-                                    : "bg-amber-100 text-amber-700",
-                                )}
-                                title={`${item.type === 'task' ? 'Task' : 'Invoice'} due: ${item.title}`}
-                              >
-                                {item.type === 'task'
-                                  ? <CheckSquare className="h-2 w-2 shrink-0" />
-                                  : <FileText className="h-2 w-2 shrink-0" />
-                                }
-                                <span className="truncate">{item.title}</span>
-                              </div>
-                            ))}
-                            {totalShown > 4 && (
+                            {hidden > 0 && (
                               <p className="text-[10px] text-muted-foreground pl-1">
-                                +{totalShown - 4} more
+                                +{hidden} más
                               </p>
                             )}
                           </div>
@@ -533,7 +879,7 @@ const Calendar = () => {
           <CardContent>
             {!selectedDate ? (
               <p className="text-sm text-muted-foreground">Click a day on the calendar to see events.</p>
-            ) : selectedEvents.length === 0 && (dueDatesByDate[selectedDate] || []).length === 0 ? (
+            ) : selectedItems.length === 0 ? (
               <div className="text-center py-6">
                 <CalendarDays className="mx-auto h-8 w-8 text-muted-foreground mb-2" />
                 <p className="text-sm text-muted-foreground mb-3">No events on this day.</p>
@@ -544,77 +890,83 @@ const Calendar = () => {
               </div>
             ) : (
               <div className="space-y-3">
-                {/* Due-date items (read-only) */}
-                {(dueDatesByDate[selectedDate || ''] || []).map((item) => (
-                  <div
-                    key={`due-${item.type}-${item.id}`}
-                    className={cn(
-                      "border rounded-lg p-3 space-y-1",
-                      item.type === 'task' ? "border-violet-200 bg-violet-50" : "border-amber-200 bg-amber-50",
-                    )}
-                  >
-                    <div className="flex items-center gap-2">
-                      {item.type === 'task'
-                        ? <CheckSquare className="h-3.5 w-3.5 text-violet-600 shrink-0" />
-                        : <FileText className="h-3.5 w-3.5 text-amber-600 shrink-0" />
-                      }
-                      <span className="font-medium text-sm truncate">{item.title}</span>
-                    </div>
-                    <p className={cn(
-                      "text-xs",
-                      item.type === 'task' ? "text-violet-600" : "text-amber-600",
-                    )}>
-                      {item.type === 'task' ? 'Tarea vence hoy' : `Factura ${item.status} vence hoy`}
-                    </p>
-                  </div>
-                ))}
-                {selectedEvents.map((evt) => (
-                  <div
-                    key={evt.id}
-                    className="border rounded-lg p-3 space-y-1"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-3 w-3 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: evt.color || "#3b82f6" }}
-                        />
-                        <span className="font-medium text-sm">{evt.title}</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-red-500"
-                        onClick={() => handleDelete(evt.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    {evt.description && (
-                      <p className="text-xs text-muted-foreground">{evt.description}</p>
-                    )}
-                    {!evt.allDay && (
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(evt.startDate).toLocaleTimeString("en-US", {
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })}
-                        {evt.endDate && (
-                          <>
-                            {" - "}
-                            {new Date(evt.endDate).toLocaleTimeString("en-US", {
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </>
+                {selectedItems.map((item) => {
+                  const evt = item.event;
+
+                  // Hitos y vencimientos: sólo lectura.
+                  if (!evt) {
+                    const style = SOURCE_STYLES[item.source as Exclude<SourceKey, "event">];
+                    const readOnly = item.source === "project" || item.source === "phase";
+                    return (
+                      <div
+                        key={item.key}
+                        role={readOnly ? "button" : undefined}
+                        onClick={() => openItem(item)}
+                        className={cn(
+                          "border rounded-lg p-3 space-y-1",
+                          style.panel,
+                          readOnly && "cursor-pointer hover:brightness-95",
                         )}
-                      </p>
-                    )}
-                    {evt.allDay && (
-                      <Badge variant="secondary" className="text-[10px]">All Day</Badge>
-                    )}
-                  </div>
-                ))}
+                      >
+                        <div className="flex items-center gap-2">
+                          {item.milestone && (
+                            <span className={cn("text-xs shrink-0", style.text)}>
+                              {milestoneGlyph(item.milestone.kind)}
+                            </span>
+                          )}
+                          {sourceIcon(item.source, cn("h-3.5 w-3.5 shrink-0", style.text))}
+                          <span className="font-medium text-sm truncate">{item.title}</span>
+                        </div>
+                        <p className={cn("text-xs", style.text)}>{item.subtitle}</p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={item.key} className="border rounded-lg p-3 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className="h-3 w-3 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: evt.color || "#3b82f6" }}
+                          />
+                          <span className="font-medium text-sm">{evt.title}</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-red-500"
+                          onClick={() => handleDelete(evt.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      {evt.description && (
+                        <p className="text-xs text-muted-foreground">{evt.description}</p>
+                      )}
+                      {!evt.allDay && (
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(evt.startDate).toLocaleTimeString("en-US", {
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                          {evt.endDate && (
+                            <>
+                              {" - "}
+                              {new Date(evt.endDate).toLocaleTimeString("en-US", {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </>
+                          )}
+                        </p>
+                      )}
+                      {evt.allDay && (
+                        <Badge variant="secondary" className="text-[10px]">All Day</Badge>
+                      )}
+                    </div>
+                  );
+                })}
                 <Button
                   size="sm"
                   variant="outline"

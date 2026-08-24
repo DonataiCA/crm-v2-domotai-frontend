@@ -1,5 +1,5 @@
 import api from '@/lib/api-client';
-import type { CalendarEvent } from '@/types/api';
+import type { CalendarEvent, CalendarOverview } from '@/types/api';
 
 export const calendarService = {
   getEvents: async (filters?: {
@@ -10,6 +10,19 @@ export const calendarService = {
     projectId?: string;
   }): Promise<CalendarEvent[]> => {
     const { data } = await api.get<CalendarEvent[]>('/calendar', { params: filters });
+    return data;
+  },
+
+  /**
+   * Eventos del rango más los hitos derivados de proyectos y fases en una sola
+   * llamada. `sources` es un CSV: omitirlo pide todas las fuentes.
+   */
+  getOverview: async (filters: {
+    dateFrom: string;
+    dateTo: string;
+    sources?: string;
+  }): Promise<CalendarOverview> => {
+    const { data } = await api.get<CalendarOverview>('/calendar/overview', { params: filters });
     return data;
   },
 
