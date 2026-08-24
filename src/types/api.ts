@@ -605,7 +605,14 @@ export interface TemplateIssue {
 export interface ImportTasksResponse {
   created: number;
   tasks: ProjectTask[];
+  /** Impiden importar: no se ha creado ninguna tarea. */
   issues: TemplateIssue[];
+  /**
+   * La tarea se creó, pero colocada de otra forma: un área que no existe cae en la
+   * primera fase y un responsable que no es miembro se queda sin asignar. Opcional
+   * porque un backend anterior a este cambio no lo devuelve.
+   */
+  warnings?: TemplateIssue[];
 }
 
 // ─── Calendar Event ─────────────────────────────────────────────────────────

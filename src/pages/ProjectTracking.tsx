@@ -328,6 +328,7 @@ const ProjectTracking = () => {
           </div>
           <TaskFileImport
             projectId={projectId || ''}
+            phases={phases}
             onTasksImported={refreshTrackingData}
           />
         </div>

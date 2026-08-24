@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
@@ -20,6 +20,7 @@ import {
   AlertCircle,
   Calendar,
   CheckCircle,
+  ClipboardCopy,
   Download,
   FileText,
   Flag,
@@ -29,7 +30,8 @@ import {
   User,
   X,
 } from "lucide-react";
-import type { ProjectTask, TemplateIssue } from "@/types/api";
+import type { ProjectPhase, ProjectTask, ProjectTeamMember, TemplateIssue } from "@/types/api";
+import { buildAiPrompt } from "./task-import-prompt";
 
 /**
  * Alta de tareas subiendo un archivo `.md` o `.txt` con la plantilla del CRM.
@@ -53,13 +55,17 @@ type TaskWithPhase = ProjectTask & { phase?: { id: string; name: string } | null
 
 interface TaskFileImportProps {
   projectId: string;
+  /** Las áreas del proyecto; el prompt para la IA se arma con sus nombres. */
+  phases: ProjectPhase[];
   onTasksImported: () => void;
 }
 
-export const TaskFileImport = ({ projectId, onTasksImported }: TaskFileImportProps) => {
+export const TaskFileImport = ({ projectId, phases, onTasksImported }: TaskFileImportProps) => {
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
   const [issues, setIssues] = useState<TemplateIssue[]>([]);
+  const [warnings, setWarnings] = useState<TemplateIssue[]>([]);
+  const [members, setMembers] = useState<ProjectTeamMember[]>([]);
   const [imported, setImported] = useState<TaskWithPhase[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -123,11 +129,41 @@ export const TaskFileImport = ({ projectId, onTasksImported }: TaskFileImportPro
     await takeFile(files[0]);
   };
 
+  // Los miembros sólo hacen falta para armar el prompt de la IA, así que se piden una
+  // vez al abrir el panel y su fallo no interrumpe nada: sin ellos el prompt sale con la
+  // lista de personas vacía, que sigue siendo mejor que no tener prompt.
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
+    projectService
+      .getMembers(projectId)
+      .then((list) => { if (!cancelled) setMembers(list); })
+      .catch(() => { if (!cancelled) setMembers([]); });
+    return () => { cancelled = true; };
+  }, [projectId]);
+
+  const copyAiPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(buildAiPrompt(phases, members));
+      toast({
+        title: "Instrucciones copiadas",
+        description: "Pégaselas a la IA con la que generes las tareas.",
+      });
+    } catch {
+      toast({
+        title: "No se pudo copiar",
+        description: "Tu navegador ha bloqueado el portapapeles.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleImport = async () => {
     if (!attachment || isImporting) return;
 
     setIsImporting(true);
     setIssues([]);
+    setWarnings([]);
     setImported([]);
 
     try {
@@ -137,6 +173,7 @@ export const TaskFileImport = ({ projectId, onTasksImported }: TaskFileImportPro
       });
 
       setImported(data.tasks as TaskWithPhase[]);
+      setWarnings(data.warnings ?? []);
       clearAttachment();
       toast({
         title: "Tareas importadas",
@@ -163,7 +200,13 @@ export const TaskFileImport = ({ projectId, onTasksImported }: TaskFileImportPro
 
   return (
     <div
-      className="flex flex-col h-full relative"
+      /* `flex-1 min-h-0` y no `h-full`: el panel que lo contiene es flex-col y ya gasta
+         parte de su alto en la cabecera, así que pedir el 100% hacía que el componente
+         sobresaliera por abajo justo esa altura y la última tarea quedara cortada fuera
+         de la pantalla. `min-h-0` es lo que permite que el hijo con scroll encoja: sin
+         él, un hijo flex nunca baja de su alto de contenido y el overflow no llega a
+         activarse. */
+      className="flex flex-col flex-1 min-h-0 relative"
       onDragOver={handleDragOver}
       onDragEnter={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -177,7 +220,7 @@ export const TaskFileImport = ({ projectId, onTasksImported }: TaskFileImportPro
         </div>
       )}
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-4">
         {/* Cómo se usa. Sin caja de texto, el panel tiene que explicarse solo. */}
         <div className="rounded-lg border bg-muted/30 p-3 space-y-2">
           <div className="flex items-center gap-2 text-sm font-medium">
@@ -193,12 +236,21 @@ export const TaskFileImport = ({ projectId, onTasksImported }: TaskFileImportPro
               enlace es el elemento activable más cercano, así que se queda el clic y el
               enlace no llega a navegar — el botón parece muerto. Con `asChild` el propio
               Button ES el <a>, que es lo que descarga. */}
-          <Button asChild variant="outline" size="sm" className="h-8 gap-1.5">
-            <a href={TEMPLATE_URL} download="plantilla-tareas.md">
-              <Download className="h-3.5 w-3.5" />
-              Descargar plantilla
-            </a>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm" className="h-8 gap-1.5">
+              <a href={TEMPLATE_URL} download="plantilla-tareas.md">
+                <Download className="h-3.5 w-3.5" />
+                Descargar plantilla
+              </a>
+            </Button>
+            {/* El camino real es "se lo pido a una IA y lo subo aquí". Estas
+                instrucciones llevan las áreas y las personas de ESTE proyecto, que es lo
+                único que la IA no puede adivinar. */}
+            <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={copyAiPrompt}>
+              <ClipboardCopy className="h-3.5 w-3.5" />
+              Copiar instrucciones para la IA
+            </Button>
+          </div>
         </div>
 
         {/* Zona de subida. El arrastre no puede ser la única forma de entrar. */}
@@ -253,6 +305,29 @@ export const TaskFileImport = ({ projectId, onTasksImported }: TaskFileImportPro
                     <span className="text-muted-foreground"> · {issue.taskTitle}</span>
                   )}
                   <div>{issue.message}</div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Avisos: la tarea SÍ se creó, pero no donde decía el archivo. Van en ámbar y
+            no en rojo justamente por eso — no hay nada que corregir y volver a subir. */}
+        {warnings.length > 0 && (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 space-y-2">
+            <div className="flex items-center gap-1.5 text-sm font-medium text-amber-700">
+              <AlertCircle className="h-4 w-4" />
+              {warnings.length === 1
+                ? "Se importó con un ajuste"
+                : `Se importó con ${warnings.length} ajustes`}
+            </div>
+            <ul className="space-y-1">
+              {warnings.map((warning, index) => (
+                <li key={index} className="text-xs text-amber-800">
+                  <span className="font-medium">
+                    {warning.taskTitle ? `${warning.taskTitle}: ` : `línea ${warning.line}: `}
+                  </span>
+                  {warning.message}
                 </li>
               ))}
             </ul>
