@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useQueryClient, keepPreviousData } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -13,14 +14,30 @@ import {
 } from "@/components/ui/select";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { collectionService } from "@/services/collection.service";
-import type { CollectionStatus } from "@/types/api";
+import { invoiceService } from "@/services/invoice.service";
+import { availableActions } from "./collections/row-actions";
+import { useToast } from "@/hooks/use-toast";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type { CollectionRow, CollectionStatus } from "@/types/api";
 import {
   AlertTriangle,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Clock,
+  Download,
+  ExternalLink,
+  Mail,
+  MoreHorizontal,
   Search,
+  User,
   Wallet,
 } from "lucide-react";
 
@@ -60,8 +77,80 @@ function daysLate(dueDate: string | null): number | null {
   return days > 0 ? days : null;
 }
 
+/**
+ * Acciones de una fila. Sólo se pintan las que `availableActions` autoriza: ofrecer
+ * "enviar recordatorio" a un cliente sin email es un clic que sólo puede acabar en
+ * error, y "cobrar" algo ya cobrado no se puede deshacer limpiamente.
+ */
+function RowMenu({
+  row,
+  onCharge,
+  onRemind,
+  onPdf,
+  onOpenInvoice,
+  onOpenContact,
+}: {
+  row: CollectionRow;
+  onCharge: () => void;
+  onRemind: () => void;
+  onPdf: () => void;
+  onOpenInvoice: () => void;
+  onOpenContact: () => void;
+}) {
+  const actions = availableActions(row);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-8 w-8">
+          <MoreHorizontal className="h-4 w-4" />
+          <span className="sr-only">Acciones de este cobro</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        {actions.includes("markPaid") && (
+          <DropdownMenuItem onSelect={onCharge}>
+            <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-600" />
+            Marcar como cobrada
+          </DropdownMenuItem>
+        )}
+        {actions.includes("sendReminder") && (
+          <DropdownMenuItem onSelect={onRemind}>
+            <Mail className="h-4 w-4 mr-2" />
+            Enviar recordatorio
+          </DropdownMenuItem>
+        )}
+        {(actions.includes("markPaid") || actions.includes("sendReminder")) && (
+          <DropdownMenuSeparator />
+        )}
+        <DropdownMenuItem onSelect={onPdf}>
+          <Download className="h-4 w-4 mr-2" />
+          Descargar PDF
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onOpenInvoice}>
+          <ExternalLink className="h-4 w-4 mr-2" />
+          Ver la factura
+        </DropdownMenuItem>
+        {actions.includes("viewContact") && (
+          <DropdownMenuItem onSelect={onOpenContact}>
+            <User className="h-4 w-4 mr-2" />
+            Ver el cliente
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export default function Collections() {
   const { currentOrganization } = useOrganization();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  /** Cobro que espera confirmación. Marcar pagado por error no se deshace limpio. */
+  const [toCharge, setToCharge] = useState<CollectionRow | null>(null);
+  const [isCharging, setIsCharging] = useState(false);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -108,6 +197,55 @@ export default function Collections() {
   const rows = data?.data ?? [];
   const pagination = data?.pagination;
   const totalPages = pagination?.pages ?? 0;
+
+  /** Tras cobrar cambian la lista y las tarjetas: si no se refrescan, el "40/89" miente. */
+  const refreshAll = () => {
+    queryClient.invalidateQueries({ queryKey: ["collections"] });
+    queryClient.invalidateQueries({ queryKey: ["collections-summary"] });
+  };
+
+  const confirmCharge = async () => {
+    if (!toCharge || isCharging) return;
+    try {
+      setIsCharging(true);
+      await invoiceService.markAsPaid(toCharge.id);
+      toast({
+        title: "Cobro registrado",
+        description: `${toCharge.contact?.name ?? "Sin cliente"} — ${formatCurrency(toCharge.total)}`,
+      });
+      refreshAll();
+    } catch {
+      toast({
+        title: "No se pudo registrar el cobro",
+        description: "Inténtalo de nuevo en unos segundos.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCharging(false);
+      setToCharge(null);
+    }
+  };
+
+  const sendReminder = async (row: CollectionRow) => {
+    try {
+      await invoiceService.sendByEmail(row.id);
+      toast({ title: "Recordatorio enviado", description: row.contact?.email ?? "" });
+    } catch {
+      toast({
+        title: "No se pudo enviar el recordatorio",
+        description: "Revisa la configuración de correo del servidor.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const downloadPdf = async (row: CollectionRow) => {
+    try {
+      await invoiceService.downloadPDF(row.id, row.invoiceNumber ?? row.id);
+    } catch {
+      toast({ title: "No se pudo descargar el PDF", variant: "destructive" });
+    }
+  };
 
   const paidThisMonth = summary?.paidThisMonth ?? 0;
   const dueThisMonth = summary?.dueThisMonth ?? 0;
@@ -229,12 +367,13 @@ export default function Collections() {
                   <th className="px-4 py-3 font-medium">Vence</th>
                   <th className="px-4 py-3 font-medium text-right">Importe</th>
                   <th className="px-4 py-3 font-medium">Estado</th>
+                  <th className="px-4 py-3 w-10"><span className="sr-only">Acciones</span></th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
                       Cargando cobranzas…
                     </td>
                   </tr>
@@ -242,7 +381,7 @@ export default function Collections() {
 
                 {isError && !isLoading && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-destructive">
+                    <td colSpan={6} className="px-4 py-10 text-center text-destructive">
                       No se pudieron cargar las cobranzas.
                     </td>
                   </tr>
@@ -250,7 +389,7 @@ export default function Collections() {
 
                 {!isLoading && !isError && rows.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
                       No hay cobros que coincidan con el filtro.
                     </td>
                   </tr>
@@ -284,6 +423,16 @@ export default function Collections() {
                         <Badge variant="outline" className={style.className}>
                           {style.label}
                         </Badge>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <RowMenu
+                          row={row}
+                          onCharge={() => setToCharge(row)}
+                          onRemind={() => sendReminder(row)}
+                          onPdf={() => downloadPdf(row)}
+                          onOpenInvoice={() => navigate("/invoices")}
+                          onOpenContact={() => navigate(`/contacts/${row.contact?.id}`)}
+                        />
                       </td>
                     </tr>
                   );
@@ -325,6 +474,17 @@ export default function Collections() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        open={!!toCharge}
+        onOpenChange={(open) => !open && setToCharge(null)}
+        onConfirm={confirmCharge}
+        title="Registrar el cobro"
+        description={
+          toCharge
+            ? `Se marcará como cobrada la factura de ${toCharge.contact?.name ?? "sin cliente"} por ${formatCurrency(toCharge.total)}. Deshacerlo no es inmediato, así que confirma que el dinero ha entrado.`
+            : ""
+        }
+      />
     </div>
   );
 }
