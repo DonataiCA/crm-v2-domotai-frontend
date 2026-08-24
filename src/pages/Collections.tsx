@@ -60,13 +60,15 @@ const formatCurrency = (value: number | null | undefined) =>
   `$${(value ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
 
 const formatDate = (value: string | null) =>
-  value ? new Date(value).toLocaleDateString("es-CL", { day: "2-digit", month: "short", year: "numeric" }) : "—";
+  value
+    ? new Date(value).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    : "-";
 
 /** Un único sitio donde vive el aspecto de cada estado, para que no se repita en la tabla. */
 const STATUS_STYLES: Record<CollectionStatus, { label: string; className: string }> = {
-  PAID: { label: "Pagado", className: "bg-emerald-100 text-emerald-700 border-emerald-200" },
-  DUE: { label: "Por cobrar", className: "bg-amber-100 text-amber-700 border-amber-200" },
-  OVERDUE: { label: "Moroso", className: "bg-red-100 text-red-700 border-red-200" },
+  PAID: { label: "Paid", className: "bg-emerald-100 text-emerald-700 border-emerald-200" },
+  DUE: { label: "Due", className: "bg-amber-100 text-amber-700 border-amber-200" },
+  OVERDUE: { label: "Overdue", className: "bg-red-100 text-red-700 border-red-200" },
 };
 
 /** Días de retraso, sólo para los morosos: es el dato que decide a quién llamar antes. */
@@ -104,20 +106,20 @@ function RowMenu({
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" className="h-8 w-8">
           <MoreHorizontal className="h-4 w-4" />
-          <span className="sr-only">Acciones de este cobro</span>
+          <span className="sr-only">Actions for this charge</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-56">
         {actions.includes("markPaid") && (
           <DropdownMenuItem onSelect={onCharge}>
             <CheckCircle2 className="h-4 w-4 mr-2 text-emerald-600" />
-            Marcar como cobrada
+            Mark as paid
           </DropdownMenuItem>
         )}
         {actions.includes("sendReminder") && (
           <DropdownMenuItem onSelect={onRemind}>
             <Mail className="h-4 w-4 mr-2" />
-            Enviar recordatorio
+            Send reminder
           </DropdownMenuItem>
         )}
         {(actions.includes("markPaid") || actions.includes("sendReminder")) && (
@@ -125,16 +127,16 @@ function RowMenu({
         )}
         <DropdownMenuItem onSelect={onPdf}>
           <Download className="h-4 w-4 mr-2" />
-          Descargar PDF
+          Download PDF
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={onOpenInvoice}>
           <ExternalLink className="h-4 w-4 mr-2" />
-          Ver la factura
+          View invoice
         </DropdownMenuItem>
         {actions.includes("viewContact") && (
           <DropdownMenuItem onSelect={onOpenContact}>
             <User className="h-4 w-4 mr-2" />
-            Ver el cliente
+            View client
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
@@ -210,14 +212,14 @@ export default function Collections() {
       setIsCharging(true);
       await invoiceService.markAsPaid(toCharge.id);
       toast({
-        title: "Cobro registrado",
+        title: "Payment recorded",
         description: `${toCharge.contact?.name ?? "Sin cliente"} — ${formatCurrency(toCharge.total)}`,
       });
       refreshAll();
     } catch {
       toast({
-        title: "No se pudo registrar el cobro",
-        description: "Inténtalo de nuevo en unos segundos.",
+        title: "Could not record the payment",
+        description: "Please try again in a few seconds.",
         variant: "destructive",
       });
     } finally {
@@ -229,11 +231,11 @@ export default function Collections() {
   const sendReminder = async (row: CollectionRow) => {
     try {
       await invoiceService.sendByEmail(row.id);
-      toast({ title: "Recordatorio enviado", description: row.contact?.email ?? "" });
+      toast({ title: "Reminder sent", description: row.contact?.email ?? "" });
     } catch {
       toast({
-        title: "No se pudo enviar el recordatorio",
-        description: "Revisa la configuración de correo del servidor.",
+        title: "Could not send the reminder",
+        description: "Check the server's email configuration.",
         variant: "destructive",
       });
     }
@@ -243,7 +245,7 @@ export default function Collections() {
     try {
       await invoiceService.downloadPDF(row.id, row.invoiceNumber ?? row.id);
     } catch {
-      toast({ title: "No se pudo descargar el PDF", variant: "destructive" });
+      toast({ title: "Could not download the PDF", variant: "destructive" });
     }
   };
 
@@ -252,28 +254,28 @@ export default function Collections() {
 
   const kpis = [
     {
-      label: "Cobrados este mes",
+      label: "Collected this month",
       value: `${paidThisMonth}/${dueThisMonth}`,
       icon: CheckCircle2,
       color: "text-emerald-600",
       accent: "bg-emerald-50",
     },
     {
-      label: "Morosos",
+      label: "Overdue",
       value: String(summary?.overdue ?? 0),
       icon: AlertTriangle,
       color: "text-red-600",
       accent: "bg-red-50",
     },
     {
-      label: "Deuda vencida",
+      label: "Overdue amount",
       value: formatCurrency(summary?.overdueAmount),
       icon: Wallet,
       color: "text-red-600",
       accent: "bg-red-50",
     },
     {
-      label: "Pendiente total",
+      label: "Total outstanding",
       value: formatCurrency(summary?.pendingAmount),
       icon: Clock,
       color: "text-blue-600",
@@ -284,7 +286,7 @@ export default function Collections() {
   if (!currentOrganization) {
     return (
       <div className="py-10 text-center text-muted-foreground">
-        Selecciona una organización para ver las cobranzas.
+        Select an organization to view collections.
       </div>
     );
   }
@@ -292,10 +294,10 @@ export default function Collections() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Cobranzas</h1>
+        <h1 className="text-2xl font-bold">Collections</h1>
         <p className="text-sm text-muted-foreground">
-          Quién debe, cuánto y desde cuándo. Se considera moroso a partir de los 5 días de
-          gracia tras el vencimiento.
+          Who owes what, and since when. An invoice counts as overdue 5 grace days after
+          its due date.
         </p>
       </div>
 
@@ -323,7 +325,7 @@ export default function Collections() {
         <div className="relative flex-1 min-w-[220px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
-            placeholder="Buscar por cliente, email o número de factura"
+            placeholder="Search by client, email or invoice number"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="pl-9"
@@ -332,13 +334,13 @@ export default function Collections() {
 
         <Select value={status} onValueChange={(v) => setStatus(v as CollectionStatus | "all")}>
           <SelectTrigger className="w-44">
-            <SelectValue placeholder="Estado" />
+            <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos los estados</SelectItem>
-            <SelectItem value="OVERDUE">Morosos</SelectItem>
-            <SelectItem value="DUE">Por cobrar</SelectItem>
-            <SelectItem value="PAID">Pagados</SelectItem>
+            <SelectItem value="all">All statuses</SelectItem>
+            <SelectItem value="OVERDUE">Overdue</SelectItem>
+            <SelectItem value="DUE">Due</SelectItem>
+            <SelectItem value="PAID">Paid</SelectItem>
           </SelectContent>
         </Select>
 
@@ -349,7 +351,7 @@ export default function Collections() {
           <SelectContent>
             {PAGE_SIZES.map((size) => (
               <SelectItem key={size} value={String(size)}>
-                {size} por página
+                {size} per page
               </SelectItem>
             ))}
           </SelectContent>
@@ -362,19 +364,19 @@ export default function Collections() {
             <table className="w-full text-sm">
               <thead className="border-b bg-muted/40">
                 <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Cliente</th>
-                  <th className="px-4 py-3 font-medium">Servicio</th>
-                  <th className="px-4 py-3 font-medium">Vence</th>
-                  <th className="px-4 py-3 font-medium text-right">Importe</th>
-                  <th className="px-4 py-3 font-medium">Estado</th>
-                  <th className="px-4 py-3 w-10"><span className="sr-only">Acciones</span></th>
+                  <th className="px-4 py-3 font-medium">Client</th>
+                  <th className="px-4 py-3 font-medium">Service</th>
+                  <th className="px-4 py-3 font-medium">Due</th>
+                  <th className="px-4 py-3 font-medium text-right">Amount</th>
+                  <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 w-10"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && (
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
-                      Cargando cobranzas…
+                      Loading collections...
                     </td>
                   </tr>
                 )}
@@ -382,7 +384,7 @@ export default function Collections() {
                 {isError && !isLoading && (
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-destructive">
-                      No se pudieron cargar las cobranzas.
+                      Failed to load collections.
                     </td>
                   </tr>
                 )}
@@ -390,7 +392,7 @@ export default function Collections() {
                 {!isLoading && !isError && rows.length === 0 && (
                   <tr>
                     <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
-                      No hay cobros que coincidan con el filtro.
+                      No charges match the current filter.
                     </td>
                   </tr>
                 )}
@@ -402,7 +404,7 @@ export default function Collections() {
                   return (
                     <tr key={row.id} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-4 py-3">
-                        <div className="font-medium truncate">{row.contact?.name ?? "Sin cliente"}</div>
+                        <div className="font-medium truncate">{row.contact?.name ?? "No client"}</div>
                         {row.contact?.email && (
                           <div className="text-xs text-muted-foreground truncate">{row.contact.email}</div>
                         )}
@@ -413,7 +415,7 @@ export default function Collections() {
                       <td className="px-4 py-3 whitespace-nowrap">
                         {formatDate(row.dueDate)}
                         {late && (
-                          <div className="text-xs text-red-600">{late} días de retraso</div>
+                          <div className="text-xs text-red-600">{late} days late</div>
                         )}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums whitespace-nowrap">
@@ -447,7 +449,7 @@ export default function Collections() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
             {(pagination.page - 1) * pagination.limit + 1}–
-            {Math.min(pagination.page * pagination.limit, pagination.total)} de {pagination.total} cobros
+            {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} charges
           </p>
           <div className="flex items-center gap-2">
             <Button
@@ -457,7 +459,7 @@ export default function Collections() {
               disabled={page <= 1}
             >
               <ChevronLeft className="h-4 w-4" />
-              Anterior
+              Previous
             </Button>
             <span className="text-sm text-muted-foreground px-2">
               {pagination.page} / {totalPages}
@@ -468,7 +470,7 @@ export default function Collections() {
               onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
               disabled={page >= totalPages}
             >
-              Siguiente
+              Next
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -480,10 +482,10 @@ export default function Collections() {
         onConfirm={confirmCharge}
         confirmLabel="Confirm"
         destructive={false}
-        title="Registrar el cobro"
+        title="Record payment"
         description={
           toCharge
-            ? `Se marcará como cobrada la factura de ${toCharge.contact?.name ?? "sin cliente"} por ${formatCurrency(toCharge.total)}. Deshacerlo no es inmediato, así que confirma que el dinero ha entrado.`
+            ? `This will mark ${toCharge.contact?.name ?? "an unassigned client"}'s invoice for ${formatCurrency(toCharge.total)} as paid. Undoing it is not straightforward, so confirm the money has arrived.`
             : ""
         }
       />

@@ -44,7 +44,7 @@ const navItems = [
   { label: "Companies", icon: Building2, path: "/companies" },
   { label: "Tasks", icon: CheckSquare, path: "/tasks" },
   { label: "Invoices", icon: Receipt, path: "/invoices" },
-  { label: "Cobranzas", icon: Wallet, path: "/collections" },
+  { label: "Collections", icon: Wallet, path: "/collections" },
   { label: "Time Tracking", icon: Clock, path: "/time-tracking" },
   { label: "Financial", icon: DollarSign, path: "/financial" },
   { label: "Calendar", icon: CalendarDays, path: "/calendar" },
