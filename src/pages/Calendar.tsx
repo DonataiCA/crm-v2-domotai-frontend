@@ -108,32 +108,61 @@ type DayItem = {
   milestone?: CalendarMilestone;
 };
 
-/** Estilos de las fuentes de sólo lectura. Los eventos usan su color propio. */
+/** Color por defecto de un evento sin color propio. */
+const DEFAULT_EVENT_COLOR = "#3b82f6";
+
+/**
+ * Estilos de las fuentes de sólo lectura. Los eventos usan su color propio.
+ *
+ * `dot` es el tono sólido con el que se identifica la fuente en el menú de
+ * filtros: los de `chip` son fondos claros y como punto se ven lavados.
+ */
 const SOURCE_STYLES: Record<
   Exclude<SourceKey, "event">,
-  { chip: string; panel: string; text: string }
+  { chip: string; panel: string; text: string; dot: string }
 > = {
   project: {
     chip: "bg-sky-100 text-sky-700",
     panel: "border-sky-200 bg-sky-50",
     text: "text-sky-600",
+    dot: "bg-sky-500",
   },
   phase: {
     chip: "bg-emerald-100 text-emerald-700",
     panel: "border-emerald-200 bg-emerald-50",
     text: "text-emerald-600",
+    dot: "bg-emerald-500",
   },
   task: {
     chip: "bg-violet-100 text-violet-700",
     panel: "border-violet-200 bg-violet-50",
     text: "text-violet-600",
+    dot: "bg-violet-500",
   },
   invoice: {
     chip: "bg-amber-100 text-amber-700",
     panel: "border-amber-200 bg-amber-50",
     text: "text-amber-600",
+    dot: "bg-amber-500",
   },
 };
+
+/**
+ * Punto de color que identifica a una fuente en el menú de filtros. Los eventos
+ * no tienen un color fijo —cada uno lleva el suyo—, así que se muestra el que
+ * usan por defecto, y por eso este es el único caso que va por estilo en línea.
+ */
+function SourceDot({ source }: { source: SourceKey }) {
+  if (source === "event") {
+    return (
+      <span
+        className="h-2.5 w-2.5 rounded-full shrink-0"
+        style={{ backgroundColor: DEFAULT_EVENT_COLOR }}
+      />
+    );
+  }
+  return <span className={`h-2.5 w-2.5 rounded-full shrink-0 ${SOURCE_STYLES[source].dot}`} />;
+}
 
 function sourceIcon(source: SourceKey, className: string) {
   switch (source) {
@@ -551,7 +580,7 @@ const Calendar = () => {
             "truncate rounded px-1 py-0.5 font-medium text-white leading-tight",
             compact ? "text-[10px]" : "text-[11px]",
           )}
-          style={{ backgroundColor: item.color || "#3b82f6" }}
+          style={{ backgroundColor: item.color || DEFAULT_EVENT_COLOR }}
           title={item.title}
         >
           {item.title}
@@ -621,7 +650,10 @@ const Calendar = () => {
                 onCheckedChange={() => toggleSource(s.key)}
                 onSelect={(e) => e.preventDefault()}
               >
-                {s.label}
+                <span className="flex items-center gap-2">
+                  <SourceDot source={s.key} />
+                  {s.label}
+                </span>
               </DropdownMenuCheckboxItem>
             ))}
             <DropdownMenuSeparator />
@@ -928,7 +960,7 @@ const Calendar = () => {
                         <div className="flex items-center gap-2">
                           <div
                             className="h-3 w-3 rounded-full flex-shrink-0"
-                            style={{ backgroundColor: evt.color || "#3b82f6" }}
+                            style={{ backgroundColor: evt.color || DEFAULT_EVENT_COLOR }}
                           />
                           <span className="font-medium text-sm">{evt.title}</span>
                         </div>
