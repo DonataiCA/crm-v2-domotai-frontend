@@ -15,6 +15,17 @@ interface ConfirmDialogProps {
   onConfirm: () => void;
   title: string;
   description: string;
+  /**
+   * Texto del botón que confirma. Por defecto "Delete" porque casi todos los usos son
+   * borrados; una acción que no borra debe decir lo que hace.
+   */
+  confirmLabel?: string;
+  /**
+   * Pinta el botón en rojo. Por defecto sí, por el mismo motivo. Ponerlo en falso para
+   * acciones que no destruyen nada: el rojo es una advertencia y gastarlo donde no hay
+   * peligro le quita fuerza donde sí lo hay.
+   */
+  destructive?: boolean;
 }
 
 export const ConfirmDialog = ({
@@ -23,6 +34,8 @@ export const ConfirmDialog = ({
   onConfirm,
   title,
   description,
+  confirmLabel = "Delete",
+  destructive = true,
 }: ConfirmDialogProps) => {
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
@@ -33,8 +46,15 @@ export const ConfirmDialog = ({
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel>Cancel</AlertDialogCancel>
-          <AlertDialogAction onClick={onConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-            Delete
+          <AlertDialogAction
+            onClick={onConfirm}
+            className={
+              destructive
+                ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                : undefined
+            }
+          >
+            {confirmLabel}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

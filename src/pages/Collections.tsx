@@ -478,6 +478,8 @@ export default function Collections() {
         open={!!toCharge}
         onOpenChange={(open) => !open && setToCharge(null)}
         onConfirm={confirmCharge}
+        confirmLabel="Confirm"
+        destructive={false}
         title="Registrar el cobro"
         description={
           toCharge
