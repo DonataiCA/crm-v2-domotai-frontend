@@ -42,7 +42,6 @@ import {
   ExternalLink,
   FileDown,
   Plus,
-  Mail,
   MoreHorizontal,
   Pencil,
   Ban,
@@ -103,7 +102,6 @@ function daysLate(dueDate: string | null): number | null {
 function RowMenu({
   row,
   onCharge,
-  onRemind,
   onPdf,
   onOpenInvoice,
   onOpenContact,
@@ -112,7 +110,6 @@ function RowMenu({
 }: {
   row: CollectionRow;
   onCharge: () => void;
-  onRemind: () => void;
   onPdf: () => void;
   onOpenInvoice: () => void;
   onOpenContact: () => void;
@@ -136,15 +133,7 @@ function RowMenu({
             Mark as paid
           </DropdownMenuItem>
         )}
-        {actions.includes("sendReminder") && (
-          <DropdownMenuItem onSelect={onRemind}>
-            <Mail className="h-4 w-4 mr-2" />
-            Send reminder
-          </DropdownMenuItem>
-        )}
-        {(actions.includes("markPaid") || actions.includes("sendReminder")) && (
-          <DropdownMenuSeparator />
-        )}
+        {actions.includes("markPaid") && <DropdownMenuSeparator />}
         <DropdownMenuItem onSelect={onPdf}>
           <Download className="h-4 w-4 mr-2" />
           Download PDF
@@ -324,19 +313,6 @@ export default function Collections() {
       toast({ title: "Could not cancel the service", variant: "destructive" });
     } finally {
       setToCancel(null);
-    }
-  };
-
-  const sendReminder = async (row: CollectionRow) => {
-    try {
-      await invoiceService.sendByEmail(row.id);
-      toast({ title: "Reminder sent", description: row.contact?.email ?? "" });
-    } catch {
-      toast({
-        title: "Could not send the reminder",
-        description: "Check the server's email configuration.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -572,7 +548,6 @@ export default function Collections() {
                         <RowMenu
                           row={row}
                           onCharge={() => setToCharge(row)}
-                          onRemind={() => sendReminder(row)}
                           onPdf={() => downloadPdf(row)}
                           onOpenInvoice={() => navigate("/invoices")}
                           onOpenContact={() => navigate(`/contacts/${row.contact?.id}`)}

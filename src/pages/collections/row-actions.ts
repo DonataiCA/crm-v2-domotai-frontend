@@ -10,7 +10,6 @@ import type { CollectionRow } from '@/types/api';
  */
 export type RowAction =
     | 'markPaid'
-    | 'sendReminder'
     | 'downloadPdf'
     | 'viewInvoice'
     | 'viewContact'
@@ -25,9 +24,6 @@ export function availableActions(row: CollectionRow): RowAction[] {
     // "marcar como enviada" cambia el estado pero deja la fecha de pago puesta,
     // y esta página considera pagado todo lo que la tenga.
     if (!isPaid) actions.push('markPaid');
-
-    // Reclamar algo ya cobrado es el peor correo que se le puede mandar a un cliente.
-    if (!isPaid && row.contact?.email) actions.push('sendReminder');
 
     actions.push('downloadPdf', 'viewInvoice');
 

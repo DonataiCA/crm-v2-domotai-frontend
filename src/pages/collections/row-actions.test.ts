@@ -29,20 +29,6 @@ describe('availableActions', () => {
     expect(availableActions(fila({ collectionStatus: 'PAID' }))).not.toContain('markPaid');
   });
 
-  it('un moroso se puede reclamar por email', () => {
-    expect(availableActions(fila({ collectionStatus: 'OVERDUE' }))).toContain('sendReminder');
-  });
-
-  it('no se reclama lo que ya está pagado', () => {
-    expect(availableActions(fila({ collectionStatus: 'PAID' }))).not.toContain('sendReminder');
-  });
-
-  it('sin email del cliente no se ofrece el recordatorio, en vez de fallar al pulsarlo', () => {
-    const sinEmail = fila({ contact: { id: 'c-1', name: 'Andina', email: null } as CollectionRow['contact'] });
-
-    expect(availableActions(sinEmail)).not.toContain('sendReminder');
-  });
-
   it('el PDF y ver la factura están siempre, pagada o no', () => {
     for (const estado of ['PAID', 'DUE', 'OVERDUE'] as const) {
       const acciones = availableActions(fila({ collectionStatus: estado }));
