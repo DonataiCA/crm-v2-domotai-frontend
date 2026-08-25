@@ -106,6 +106,10 @@ export function ExportDialog({
       ...(currentSearch ? { search: currentSearch } : {}),
       ...(from ? { dueFrom: from } : {}),
       ...(to ? { dueTo: to } : {}),
+      // Cada fila entra por la fecha que le corresponde: la cobrada por su fecha de
+      // pago, la pendiente por su vencimiento. Un cobro de julio que entró en agosto
+      // es dinero de agosto, y con el criterio de vencimiento se caía del informe.
+      ...(from || to ? { dateBasis: "EVENT" as const } : {}),
     }),
     [content, currentSearch, from, to],
   );
@@ -180,7 +184,7 @@ export function ExportDialog({
             <p className="text-xs text-muted-foreground">
               {preset === "ALL"
                 ? "No date limit: matches the Overdue and Total outstanding cards."
-                : "Filters by due date."}
+                : "Paid charges count on the day they were collected; the rest, on their due date."}
             </p>
           </div>
 

@@ -18,6 +18,7 @@ export const CSV_HEADERS = [
     'Service status',
     'Invoice number',
     'Due date',
+    'Paid on',
     'Amount',
     'Currency',
     'Status',
@@ -65,6 +66,9 @@ export function toCsv(rows: CollectionRow[]): string {
                 escape(serviceStatusStyle(row.serviceStatus)?.label),
                 escape(row.invoiceNumber),
                 escape(isoDate(row.dueDate)),
+                // Cuándo entró el dinero. Es lo que explica que un cobro vencido en
+                // julio aparezca en el informe de agosto.
+                escape(isoDate(row.paidAt)),
                 escape(row.total ?? 0),
                 escape(row.currency),
                 escape(STATUS_LABELS[row.collectionStatus]),

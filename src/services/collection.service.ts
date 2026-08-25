@@ -7,6 +7,12 @@ export interface CollectionFilters {
   /** Vencimiento desde / hasta, en formato AAAA-MM-DD. */
   dueFrom?: string;
   dueTo?: string;
+  /**
+   * Qué fecha delimita el rango. `DUE` responde a «de lo que vencía en agosto, ¿cuánto
+   * hay cobrado?»; `EVENT`, a «¿qué pasó en agosto?», donde una cobrada entra por su
+   * fecha de pago aunque venciera el mes anterior. Sin valor, manda el vencimiento.
+   */
+  dateBasis?: 'DUE' | 'EVENT';
 }
 
 /**
@@ -27,6 +33,7 @@ export const collectionService = {
         ...(filters.search ? { search: filters.search } : {}),
         ...(filters.dueFrom ? { dueFrom: filters.dueFrom } : {}),
         ...(filters.dueTo ? { dueTo: filters.dueTo } : {}),
+        ...(filters.dateBasis ? { dateBasis: filters.dateBasis } : {}),
       },
     });
     return data;
