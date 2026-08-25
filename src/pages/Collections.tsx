@@ -17,6 +17,7 @@ import { collectionService } from "@/services/collection.service";
 import { invoiceService } from "@/services/invoice.service";
 import { availableActions } from "./collections/row-actions";
 import { toCsv } from "./collections/export-csv";
+import { NewChargeDialog } from "./collections/NewChargeDialog";
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
@@ -36,6 +37,7 @@ import {
   Download,
   ExternalLink,
   FileDown,
+  Plus,
   Mail,
   MoreHorizontal,
   Search,
@@ -162,6 +164,7 @@ export default function Collections() {
   const [toCharge, setToCharge] = useState<CollectionRow | null>(null);
   const [isCharging, setIsCharging] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isNewOpen, setIsNewOpen] = useState(false);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -396,6 +399,11 @@ export default function Collections() {
           </SelectContent>
         </Select>
 
+        <Button onClick={() => setIsNewOpen(true)} className="gap-2">
+          <Plus className="h-4 w-4" />
+          New charge
+        </Button>
+
         <Button
           variant="outline"
           onClick={exportCsv}
@@ -538,6 +546,12 @@ export default function Collections() {
           </div>
         </div>
       )}
+      <NewChargeDialog
+        open={isNewOpen}
+        onOpenChange={setIsNewOpen}
+        onCreated={refreshAll}
+      />
+
       <ConfirmDialog
         open={!!toCharge}
         onOpenChange={(open) => !open && setToCharge(null)}
