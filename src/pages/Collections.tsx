@@ -521,7 +521,20 @@ export default function Collections() {
                   return (
                     <tr key={row.id} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-4 py-3">
-                        <div className="font-medium truncate">{row.contact?.name ?? "No client"}</div>
+                        {/* El nombre lleva a su ficha. Es un botón y no la fila entera:
+                            pulsar cualquier parte de una fila con menú de acciones
+                            dispararía navegaciones que nadie pidió. */}
+                        {row.contact?.id ? (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/contacts/${row.contact!.id}`)}
+                            className="font-medium truncate hover:underline text-left"
+                          >
+                            {row.contact.name}
+                          </button>
+                        ) : (
+                          <div className="font-medium truncate text-muted-foreground">No client</div>
+                        )}
                         {row.contact?.email && (
                           <div className="text-xs text-muted-foreground truncate">{row.contact.email}</div>
                         )}
