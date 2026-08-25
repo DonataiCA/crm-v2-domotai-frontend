@@ -621,7 +621,11 @@ export interface ImportTasksResponse {
  * Estado de cobro. No es una columna: el backend lo deriva del vencimiento, de la
  * fecha de pago y del margen de gracia, así que aquí sólo se muestra.
  */
-export type CollectionStatus = 'PAID' | 'DUE' | 'OVERDUE';
+/**
+ * Lo que la lista puede pedir. `UNPAID` no es un estado que tenga una fila: es la unión
+ * de `DUE` y `OVERDUE`, para pedir de una vez todo lo pendiente de cobro.
+ */
+export type CollectionStatus = 'PAID' | 'DUE' | 'OVERDUE' | 'UNPAID';
 
 /**
  * Cada cuánto se cobra. `ONE_OFF` es un cobro suelto, que es un tipo en sí mismo y no

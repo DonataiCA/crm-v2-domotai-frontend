@@ -104,3 +104,32 @@ describe('toCsv', () => {
     expect(toCsv([row()])).toContain('2026-08-30');
   });
 });
+
+describe('toCsv — la fecha de cobro', () => {
+  /**
+   * Un cobro que vencía el 31 de julio y entró el 25 de agosto sale en el archivo de
+   * agosto. Sin esta columna, quien lo abre ve una fecha de julio en el informe de
+   * agosto y da por hecho que el filtro está mal.
+   */
+  it('dice cuándo entró el dinero, no sólo cuándo vencía', () => {
+    const csv = toCsv([
+      row({
+        collectionStatus: 'PAID',
+        dueDate: '2026-07-31T00:00:00.000Z',
+        paidAt: '2026-08-25T14:30:00.000Z',
+      }),
+    ]);
+
+    expect(csv).toContain('2026-08-25');
+  });
+
+  it('la deja en blanco mientras no se ha cobrado, en vez de inventar una fecha', () => {
+    const linea = toCsv([row({ paidAt: null })]).trim().split('\n')[1];
+
+    expect(linea.split(',')[CSV_HEADERS.indexOf('Paid on')]).toBe('');
+  });
+
+  it('va junto al vencimiento, para poder compararlas de un vistazo', () => {
+    expect(CSV_HEADERS.indexOf('Paid on')).toBe(CSV_HEADERS.indexOf('Due date') + 1);
+  });
+});
