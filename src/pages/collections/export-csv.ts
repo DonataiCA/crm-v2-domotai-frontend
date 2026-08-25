@@ -1,4 +1,5 @@
 import type { CollectionRow } from '@/types/api';
+import { billingTypeLabel } from './billing-type';
 
 /**
  * Exportación de la lista de cobranzas a CSV.
@@ -12,6 +13,7 @@ export const CSV_HEADERS = [
     'Client',
     'Email',
     'Service',
+    'Type',
     'Invoice number',
     'Due date',
     'Amount',
@@ -57,6 +59,7 @@ export function toCsv(rows: CollectionRow[]): string {
                 escape(row.contact?.name),
                 escape(row.contact?.email),
                 escape(row.service),
+                escape(billingTypeLabel(row.billingType)),
                 escape(row.invoiceNumber),
                 escape(isoDate(row.dueDate)),
                 escape(row.total ?? 0),

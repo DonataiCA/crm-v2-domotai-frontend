@@ -12,6 +12,7 @@ const row = (over: Partial<CollectionRow> = {}): CollectionRow => ({
   currency: 'USD',
   status: 'SENT',
   collectionStatus: 'DUE',
+  billingType: 'ONE_OFF',
   contact: { id: 'c-1', name: 'Constructora Andina', email: 'a@b.c' } as CollectionRow['contact'],
   project: null,
   ...over,
@@ -65,6 +66,17 @@ describe('toCsv', () => {
 
     expect(csv).not.toContain('null');
     expect(csv).not.toContain('undefined');
+  });
+
+  it('lleva la periodicidad legible, no el código interno', () => {
+    const csv = toCsv([row({ billingType: 'QUARTERLY' })]);
+
+    expect(csv).toContain('Quarterly');
+    expect(csv).not.toContain('QUARTERLY');
+  });
+
+  it('un cobro suelto se exporta como pago único', () => {
+    expect(toCsv([row({ billingType: 'ONE_OFF' })])).toContain('One-off');
   });
 
   it('traduce el estado a algo legible, no el código interno', () => {

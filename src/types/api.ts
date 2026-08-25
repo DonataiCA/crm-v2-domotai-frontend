@@ -623,6 +623,12 @@ export interface ImportTasksResponse {
  */
 export type CollectionStatus = 'PAID' | 'DUE' | 'OVERDUE';
 
+/**
+ * Cada cuánto se cobra. `ONE_OFF` es un cobro suelto, que es un tipo en sí mismo y no
+ * la ausencia de uno.
+ */
+export type BillingType = BillingInterval | 'ONE_OFF';
+
 export interface CollectionRow {
   id: string;
   invoiceNumber: string | null;
@@ -634,6 +640,7 @@ export interface CollectionRow {
   currency: string | null;
   status: string;
   collectionStatus: CollectionStatus;
+  billingType: BillingType;
   contact: ContactRef | null;
   project: ProjectRef | null;
 }

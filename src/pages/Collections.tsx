@@ -17,6 +17,7 @@ import { collectionService } from "@/services/collection.service";
 import { invoiceService } from "@/services/invoice.service";
 import { availableActions } from "./collections/row-actions";
 import { toCsv } from "./collections/export-csv";
+import { billingTypeLabel } from "./collections/billing-type";
 import { NewChargeDialog } from "./collections/NewChargeDialog";
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -436,6 +437,7 @@ export default function Collections() {
                 <tr className="text-left text-xs uppercase tracking-wider text-muted-foreground">
                   <th className="px-4 py-3 font-medium">Client</th>
                   <th className="px-4 py-3 font-medium">Service</th>
+                  <th className="px-4 py-3 font-medium">Type</th>
                   <th className="px-4 py-3 font-medium">Due</th>
                   <th className="px-4 py-3 font-medium text-right">Amount</th>
                   <th className="px-4 py-3 font-medium">Status</th>
@@ -445,7 +447,7 @@ export default function Collections() {
               <tbody>
                 {isLoading && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
                       Loading collections...
                     </td>
                   </tr>
@@ -453,7 +455,7 @@ export default function Collections() {
 
                 {isError && !isLoading && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-destructive">
+                    <td colSpan={7} className="px-4 py-10 text-center text-destructive">
                       Failed to load collections.
                     </td>
                   </tr>
@@ -461,7 +463,7 @@ export default function Collections() {
 
                 {!isLoading && !isError && rows.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
                       No charges match the current filter.
                     </td>
                   </tr>
@@ -481,6 +483,9 @@ export default function Collections() {
                       </td>
                       <td className="px-4 py-3 text-muted-foreground truncate max-w-[260px]">
                         {row.service ?? "—"}
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                        {billingTypeLabel(row.billingType)}
                       </td>
                       <td className="px-4 py-3 whitespace-nowrap">
                         {formatDate(row.dueDate)}
