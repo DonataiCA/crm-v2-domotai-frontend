@@ -649,6 +649,43 @@ export interface CollectionSummary {
   pendingAmount: number;
 }
 
+// ─── Servicios recurrentes ──────────────────────────────────────────────────
+
+/** Cada cuánto se cobra un servicio. */
+export type BillingInterval = 'MONTHLY' | 'QUARTERLY' | 'BIANNUAL' | 'ANNUAL';
+
+/**
+ * El compromiso de cobro que se repite. No es un documento: los documentos son las
+ * notas (`Invoice`) que genera, enlazadas por `subscriptionId`.
+ */
+export interface ServiceSubscription {
+  id: string;
+  serviceName: string;
+  amount: number;
+  currency: string | null;
+  interval: BillingInterval;
+  startDate: string;
+  /** Fin del último periodo emitido: hasta aquí está cobrado. */
+  coveredUntil: string | null;
+  /** Mientras sea null, el servicio sigue vivo. */
+  cancelledAt: string | null;
+  notes: string | null;
+  contact: ContactRef | null;
+  project: ProjectRef | null;
+  createdAt: string;
+}
+
+export interface SubscriptionPayload {
+  contactId: string;
+  projectId?: string | null;
+  serviceName: string;
+  amount: number;
+  currency?: string | null;
+  interval: BillingInterval;
+  startDate: string;
+  notes?: string | null;
+}
+
 // ─── Calendar Event ─────────────────────────────────────────────────────────
 
 export interface CalendarEvent {
