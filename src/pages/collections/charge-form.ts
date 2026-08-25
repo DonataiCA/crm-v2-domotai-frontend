@@ -64,3 +64,28 @@ export function previewTotals(items: ChargeItem[], tax: number) {
 
   return { subtotal: round2(subtotal), tax: round2(taxAmount), total: round2(subtotal + taxAmount) };
 }
+
+/**
+ * Cuerpo de `POST /invoices` para un pago único.
+ *
+ * Nace como `SENT` y no como borrador: sin eso la factura tomaría el `DRAFT` por defecto
+ * de la base, y Cobranzas excluye los borradores — se crearía un cobro desde esta
+ * pantalla que no aparecería en la lista.
+ */
+export function buildInvoicePayload(form: ChargeForm) {
+  return {
+    contactId: form.contactId,
+    // Cadena vacía no es "sin proyecto" para el validador, que espera un uuid o null.
+    projectId: form.projectId || null,
+    dueDate: form.dueDate,
+    status: 'SENT' as const,
+    tax: Number(form.tax) || 0,
+    notes: form.notes || null,
+    // Sin `total` por línea: lo calcula el servidor a partir de cantidad y precio.
+    items: filled(form.items).map((item) => ({
+      description: item.description,
+      quantity: Number(item.quantity),
+      unitPrice: Number(item.unitPrice),
+    })),
+  };
+}

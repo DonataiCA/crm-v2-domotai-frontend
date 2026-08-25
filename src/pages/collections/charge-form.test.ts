@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateCharge, previewTotals, type ChargeForm } from './charge-form';
+import { validateCharge, previewTotals, buildInvoicePayload, type ChargeForm } from './charge-form';
 
 const VALIDO: ChargeForm = {
   type: 'ONE_OFF',
@@ -79,5 +79,32 @@ describe('previewTotals', () => {
 
   it('sin líneas no da NaN', () => {
     expect(previewTotals([], 0)).toMatchObject({ subtotal: 0, total: 0 });
+  });
+});
+
+describe('buildInvoicePayload', () => {
+  /**
+   * Sin esto la factura nace como DRAFT —el valor por defecto de la base— y Cobranzas
+   * excluye los borradores: crearías un cobro desde esta pantalla y no lo verías en la
+   * lista. Lo que se da de alta aquí es un cobro exigible, no un borrador.
+   */
+  it('marca el cobro como enviado, para que aparezca en la lista', () => {
+    expect(buildInvoicePayload(VALIDO).status).toBe('SENT');
+  });
+
+  it('manda las líneas sin total: lo calcula el servidor', () => {
+    const [line] = buildInvoicePayload(VALIDO).items;
+
+    expect(line).toEqual({ description: 'Instalación', quantity: 1, unitPrice: 100 });
+  });
+
+  it('descarta las líneas en blanco', () => {
+    const conVacia = { ...VALIDO, items: [...VALIDO.items, { description: '', quantity: 1, unitPrice: 5 }] };
+
+    expect(buildInvoicePayload(conVacia).items).toHaveLength(1);
+  });
+
+  it('un proyecto sin elegir viaja como null, no como cadena vacía', () => {
+    expect(buildInvoicePayload({ ...VALIDO, projectId: '' }).projectId).toBeNull();
   });
 });

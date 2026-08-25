@@ -26,6 +26,7 @@ import { subscriptionService } from "@/services/subscription.service";
 import {
   validateCharge,
   previewTotals,
+  buildInvoicePayload,
   type ChargeForm,
   type ChargeItem,
 } from "./charge-form";
@@ -133,19 +134,7 @@ export function NewChargeDialog({ open, onOpenChange, onCreated }: NewChargeDial
           notes: form.notes || null,
         });
       } else {
-        await invoiceService.createInvoice({
-          contactId: form.contactId,
-          projectId: form.projectId || null,
-          dueDate: form.dueDate,
-          tax: form.tax,
-          notes: form.notes || null,
-          // Sin `total` por línea: lo calcula el servidor a partir de cantidad y precio.
-          items: items.map((i) => ({
-            description: i.description,
-            quantity: Number(i.quantity),
-            unitPrice: Number(i.unitPrice),
-          })),
-        });
+        await invoiceService.createInvoice(buildInvoicePayload(form));
       }
 
       toast({
