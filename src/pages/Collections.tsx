@@ -13,13 +13,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useOrganization } from "@/contexts/OrganizationContext";
-import { collectionService } from "@/services/collection.service";
+import { collectionService, type CollectionFilters } from "@/services/collection.service";
 import { invoiceService } from "@/services/invoice.service";
 import { availableActions } from "./collections/row-actions";
 import { toCsv } from "./collections/export-csv";
 import { billingTypeLabel } from "./collections/billing-type";
 import { ChangePlanDialog } from "./collections/ChangePlanDialog";
 import { serviceStatusStyle } from "./collections/service-status";
+import { ExportDialog } from "./collections/ExportDialog";
 import { subscriptionService } from "@/services/subscription.service";
 import { NewChargeDialog } from "./collections/NewChargeDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -176,7 +177,7 @@ export default function Collections() {
   /** Cobro que espera confirmación. Marcar pagado por error no se deshace limpio. */
   const [toCharge, setToCharge] = useState<CollectionRow | null>(null);
   const [isCharging, setIsCharging] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [isExportOpen, setIsExportOpen] = useState(false);
   const [isNewOpen, setIsNewOpen] = useState(false);
   /** Cobro cuyo servicio se está editando; su subscriptionId es lo que se toca. */
   const [planRow, setPlanRow] = useState<CollectionRow | null>(null);
@@ -261,17 +262,19 @@ export default function Collections() {
    * Exporta TODO lo que cumple el filtro, no la página que se ve: quien exporta quiere
    * la lista entera para trabajarla fuera, y un archivo con 10 de 117 morosos engaña.
    */
-  const exportCsv = async () => {
-    if (isExporting) return;
+  /**
+   * Exporta lo que pida el diálogo, no lo que haya en pantalla: allí se eligen periodo
+   * y contenido, y allí se ve cuántas filas van a salir.
+   */
+  const exportCsv = async (exportFilters: CollectionFilters) => {
     try {
-      setIsExporting(true);
       const perPage = 100; // el tope que admite el endpoint
-      const first = await collectionService.getCollections(1, perPage, filters);
+      const first = await collectionService.getCollections(1, perPage, exportFilters);
       const total = Math.min(first.pagination.total, EXPORT_MAX_ROWS);
       const rowsToExport = [...first.data];
 
       for (let p = 2; rowsToExport.length < total; p++) {
-        const next = await collectionService.getCollections(p, perPage, filters);
+        const next = await collectionService.getCollections(p, perPage, exportFilters);
         if (next.data.length === 0) break;
         rowsToExport.push(...next.data);
       }
@@ -295,8 +298,6 @@ export default function Collections() {
       });
     } catch {
       toast({ title: "Could not export the list", variant: "destructive" });
-    } finally {
-      setIsExporting(false);
     }
   };
 
@@ -426,12 +427,12 @@ export default function Collections() {
 
         <Button
           variant="outline"
-          onClick={exportCsv}
-          disabled={isExporting || !pagination?.total}
+          onClick={() => setIsExportOpen(true)}
+          disabled={!pagination?.total}
           className="gap-2"
         >
           <FileDown className="h-4 w-4" />
-          {isExporting ? "Exporting..." : "Export CSV"}
+          Export CSV
         </Button>
 
         <Select value={String(pageSize)} onValueChange={(v) => setPageSize(Number(v))}>
@@ -595,6 +596,14 @@ export default function Collections() {
           </div>
         </div>
       )}
+      <ExportDialog
+        open={isExportOpen}
+        onOpenChange={setIsExportOpen}
+        currentStatus={status}
+        currentSearch={debouncedSearch}
+        onExport={exportCsv}
+      />
+
       <NewChargeDialog
         open={isNewOpen}
         onOpenChange={setIsNewOpen}

@@ -4,6 +4,9 @@ import type { CollectionRow, CollectionStatus, CollectionSummary, PaginatedRespo
 export interface CollectionFilters {
   status?: CollectionStatus;
   search?: string;
+  /** Vencimiento desde / hasta, en formato AAAA-MM-DD. */
+  dueFrom?: string;
+  dueTo?: string;
 }
 
 /**
@@ -22,6 +25,8 @@ export const collectionService = {
         limit,
         ...(filters.status ? { status: filters.status } : {}),
         ...(filters.search ? { search: filters.search } : {}),
+        ...(filters.dueFrom ? { dueFrom: filters.dueFrom } : {}),
+        ...(filters.dueTo ? { dueTo: filters.dueTo } : {}),
       },
     });
     return data;
