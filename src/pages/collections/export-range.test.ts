@@ -18,6 +18,24 @@ describe('rangeFor', () => {
     expect(rangeFor('QUARTER', AGOSTO)).toEqual({ from: '2026-07-01', to: '2026-09-30' });
   });
 
+  it('el semestre cubre sus seis meses completos', () => {
+    // Agosto cae en el segundo semestre: julio a diciembre.
+    expect(rangeFor('HALF', AGOSTO)).toEqual({ from: '2026-07-01', to: '2026-12-31' });
+  });
+
+  it('el primer semestre va de enero a junio', () => {
+    expect(rangeFor('HALF', new Date('2026-03-10T00:00:00.000Z')))
+      .toEqual({ from: '2026-01-01', to: '2026-06-30' });
+  });
+
+  /**
+   * Sin rango: es lo que hace que el archivo cuadre con las tarjetas de morosos y
+   * pendiente del panel, que no filtran por fecha.
+   */
+  it('todo el histórico no acota nada', () => {
+    expect(rangeFor('ALL', AGOSTO)).toBeNull();
+  });
+
   it('el año va de enero a diciembre', () => {
     expect(rangeFor('YEAR', AGOSTO)).toEqual({ from: '2026-01-01', to: '2026-12-31' });
   });
@@ -47,13 +65,13 @@ describe('rangeFor', () => {
 });
 
 describe('RANGE_PRESETS', () => {
-  it('ofrece mes, trimestre, año y a medida', () => {
+  it('ofrece mes, trimestre, semestre, año, todo y a medida', () => {
     expect(RANGE_PRESETS.map((p) => p.value))
-      .toEqual(['MONTH', 'QUARTER', 'YEAR', 'CUSTOM'] as RangePreset[]);
+      .toEqual(['MONTH', 'QUARTER', 'HALF', 'YEAR', 'ALL', 'CUSTOM'] as RangePreset[]);
   });
 
   it('cada opción se lee sin tecnicismos', () => {
     expect(RANGE_PRESETS.map((p) => p.label))
-      .toEqual(['This month', 'This quarter', 'This year', 'Custom']);
+      .toEqual(['This month', 'This quarter', 'This half-year', 'This year', 'All time', 'Custom']);
   });
 });

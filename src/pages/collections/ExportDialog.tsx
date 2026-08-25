@@ -35,6 +35,7 @@ const CONTENT_OPTIONS: Array<{
 }> = [
   { value: "ALL", label: "Everything", hint: "Charged and still to charge" },
   { value: "PAID", label: "Collected only", hint: "What the client already paid" },
+  { value: "UNPAID", label: "Outstanding", hint: "Everything still to collect" },
   { value: "OVERDUE", label: "Overdue only", hint: "Past the 5 grace days" },
 ];
 
@@ -81,6 +82,11 @@ export function ExportDialog({
     if (range) {
       setFrom(range.from);
       setTo(range.to);
+    } else if (value === "ALL") {
+      // Sin fechas no hay rango que aplicar, que es justo lo que hace que el archivo
+      // cuadre con las tarjetas de morosos y pendiente del panel.
+      setFrom("");
+      setTo("");
     }
   };
 
@@ -132,7 +138,7 @@ export function ExportDialog({
         <div className="space-y-5">
           <div className="space-y-2">
             <Label>Period</Label>
-            <div className="grid grid-cols-4 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
               {RANGE_PRESETS.map((option) => (
                 <button
                   key={option.value}
@@ -154,14 +160,28 @@ export function ExportDialog({
             <div className="grid grid-cols-2 gap-2 pt-1">
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">From</Label>
-                <Input type="date" value={from} onChange={(e) => editFrom(e.target.value)} />
+                <Input
+                  type="date"
+                  value={from}
+                  disabled={preset === "ALL"}
+                  onChange={(e) => editFrom(e.target.value)}
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">To</Label>
-                <Input type="date" value={to} onChange={(e) => editTo(e.target.value)} />
+                <Input
+                  type="date"
+                  value={to}
+                  disabled={preset === "ALL"}
+                  onChange={(e) => editTo(e.target.value)}
+                />
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">Filters by due date.</p>
+            <p className="text-xs text-muted-foreground">
+              {preset === "ALL"
+                ? "No date limit: matches the Overdue and Total outstanding cards."
+                : "Filters by due date."}
+            </p>
           </div>
 
           <div className="space-y-2">

@@ -8,7 +8,7 @@
  * entiende un `<input type="date">`, sin husos horarios de por medio.
  */
 
-export type RangePreset = 'MONTH' | 'QUARTER' | 'YEAR' | 'CUSTOM';
+export type RangePreset = 'MONTH' | 'QUARTER' | 'HALF' | 'YEAR' | 'ALL' | 'CUSTOM';
 
 export interface DateRange {
     from: string;
@@ -18,7 +18,9 @@ export interface DateRange {
 export const RANGE_PRESETS: Array<{ value: RangePreset; label: string }> = [
     { value: 'MONTH', label: 'This month' },
     { value: 'QUARTER', label: 'This quarter' },
+    { value: 'HALF', label: 'This half-year' },
     { value: 'YEAR', label: 'This year' },
+    { value: 'ALL', label: 'All time' },
     { value: 'CUSTOM', label: 'Custom' },
 ];
 
@@ -29,7 +31,9 @@ const iso = (year: number, month: number, day: number) =>
 const lastDayOf = (year: number, month: number) => new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
 
 /**
- * `null` para `CUSTOM`: ahí las fechas las escribe la persona y no hay nada que calcular.
+ * `null` en dos casos que no calculan fechas: `CUSTOM`, donde las escribe la persona, y
+ * `ALL`, donde no hay rango que aplicar. `ALL` es lo que hace que el archivo cuadre con
+ * las tarjetas de morosos y pendiente del panel, que tampoco filtran por fecha.
  */
 export function rangeFor(preset: RangePreset, today: Date): DateRange | null {
     const year = today.getUTCFullYear();
@@ -42,6 +46,12 @@ export function rangeFor(preset: RangePreset, today: Date): DateRange | null {
     if (preset === 'QUARTER') {
         const first = Math.floor(month / 3) * 3;
         const last = first + 2;
+        return { from: iso(year, first, 1), to: iso(year, last, lastDayOf(year, last)) };
+    }
+
+    if (preset === 'HALF') {
+        const first = month < 6 ? 0 : 6;
+        const last = first + 5;
         return { from: iso(year, first, 1), to: iso(year, last, lastDayOf(year, last)) };
     }
 
