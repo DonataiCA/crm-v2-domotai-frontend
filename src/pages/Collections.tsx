@@ -19,6 +19,7 @@ import { availableActions } from "./collections/row-actions";
 import { toCsv } from "./collections/export-csv";
 import { billingTypeLabel } from "./collections/billing-type";
 import { ChangePlanDialog } from "./collections/ChangePlanDialog";
+import { serviceStatusStyle } from "./collections/service-status";
 import { subscriptionService } from "@/services/subscription.service";
 import { NewChargeDialog } from "./collections/NewChargeDialog";
 import { useToast } from "@/hooks/use-toast";
@@ -483,13 +484,14 @@ export default function Collections() {
                   <th className="px-4 py-3 font-medium">Due</th>
                   <th className="px-4 py-3 font-medium text-right">Amount</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Service</th>
                   <th className="px-4 py-3 w-10"><span className="sr-only">Actions</span></th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                       Loading collections...
                     </td>
                   </tr>
@@ -497,7 +499,7 @@ export default function Collections() {
 
                 {isError && !isLoading && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-destructive">
+                    <td colSpan={8} className="px-4 py-10 text-center text-destructive">
                       Failed to load collections.
                     </td>
                   </tr>
@@ -505,7 +507,7 @@ export default function Collections() {
 
                 {!isLoading && !isError && rows.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                    <td colSpan={8} className="px-4 py-10 text-center text-muted-foreground">
                       No charges match the current filter.
                     </td>
                   </tr>
@@ -514,6 +516,7 @@ export default function Collections() {
                 {rows.map((row) => {
                   const style = STATUS_STYLES[row.collectionStatus];
                   const late = row.collectionStatus === "OVERDUE" ? daysLate(row.dueDate) : null;
+                  const serviceStyle = serviceStatusStyle(row.serviceStatus);
 
                   return (
                     <tr key={row.id} className="border-b last:border-0 hover:bg-muted/30">
@@ -542,6 +545,15 @@ export default function Collections() {
                         <Badge variant="outline" className={style.className}>
                           {style.label}
                         </Badge>
+                      </td>
+                      <td className="px-4 py-3">
+                        {serviceStyle ? (
+                          <Badge variant="outline" className={serviceStyle.className}>
+                            {serviceStyle.label}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-right">
                         <RowMenu

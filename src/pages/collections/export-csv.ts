@@ -1,5 +1,6 @@
 import type { CollectionRow } from '@/types/api';
 import { billingTypeLabel } from './billing-type';
+import { serviceStatusStyle } from './service-status';
 
 /**
  * Exportación de la lista de cobranzas a CSV.
@@ -14,6 +15,7 @@ export const CSV_HEADERS = [
     'Email',
     'Service',
     'Type',
+    'Service status',
     'Invoice number',
     'Due date',
     'Amount',
@@ -60,6 +62,7 @@ export function toCsv(rows: CollectionRow[]): string {
                 escape(row.contact?.email),
                 escape(row.service),
                 escape(billingTypeLabel(row.billingType)),
+                escape(serviceStatusStyle(row.serviceStatus)?.label),
                 escape(row.invoiceNumber),
                 escape(isoDate(row.dueDate)),
                 escape(row.total ?? 0),

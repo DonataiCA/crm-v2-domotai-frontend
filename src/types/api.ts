@@ -629,6 +629,9 @@ export type CollectionStatus = 'PAID' | 'DUE' | 'OVERDUE';
  */
 export type BillingType = BillingInterval | 'ONE_OFF';
 
+/** Si el servicio del que nace un cobro sigue vivo. `null` en los cobros sueltos. */
+export type ServiceStatus = 'ACTIVE' | 'CANCELLED';
+
 export interface CollectionRow {
   id: string;
   invoiceNumber: string | null;
@@ -643,6 +646,7 @@ export interface CollectionRow {
   billingType: BillingType;
   /** Servicio del que nace, si no es un cobro suelto. */
   subscriptionId: string | null;
+  serviceStatus: ServiceStatus | null;
   contact: ContactRef | null;
   project: ProjectRef | null;
 }

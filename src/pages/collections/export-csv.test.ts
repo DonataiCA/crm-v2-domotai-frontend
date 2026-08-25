@@ -13,6 +13,8 @@ const row = (over: Partial<CollectionRow> = {}): CollectionRow => ({
   status: 'SENT',
   collectionStatus: 'DUE',
   billingType: 'ONE_OFF',
+  subscriptionId: null,
+  serviceStatus: null,
   contact: { id: 'c-1', name: 'Constructora Andina', email: 'a@b.c' } as CollectionRow['contact'],
   project: null,
   ...over,
@@ -66,6 +68,16 @@ describe('toCsv', () => {
 
     expect(csv).not.toContain('null');
     expect(csv).not.toContain('undefined');
+  });
+
+  it('exporta si el servicio sigue vivo', () => {
+    expect(toCsv([row({ serviceStatus: 'CANCELLED' })])).toContain('Cancelled');
+  });
+
+  it('un pago único deja vacía la celda del servicio, no dice "activo"', () => {
+    const csv = toCsv([row({ serviceStatus: null })]);
+
+    expect(csv).not.toContain('Active');
   });
 
   it('lleva la periodicidad legible, no el código interno', () => {
