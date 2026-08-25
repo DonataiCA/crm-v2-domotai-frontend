@@ -18,6 +18,8 @@ import { invoiceService } from "@/services/invoice.service";
 import { availableActions } from "./collections/row-actions";
 import { toCsv } from "./collections/export-csv";
 import { billingTypeLabel } from "./collections/billing-type";
+import { ChangePlanDialog } from "./collections/ChangePlanDialog";
+import { subscriptionService } from "@/services/subscription.service";
 import { NewChargeDialog } from "./collections/NewChargeDialog";
 import { useToast } from "@/hooks/use-toast";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
@@ -41,6 +43,8 @@ import {
   Plus,
   Mail,
   MoreHorizontal,
+  Pencil,
+  Ban,
   Search,
   User,
   Wallet,
@@ -102,6 +106,8 @@ function RowMenu({
   onPdf,
   onOpenInvoice,
   onOpenContact,
+  onChangePlan,
+  onCancelService,
 }: {
   row: CollectionRow;
   onCharge: () => void;
@@ -109,6 +115,8 @@ function RowMenu({
   onPdf: () => void;
   onOpenInvoice: () => void;
   onOpenContact: () => void;
+  onChangePlan: () => void;
+  onCancelService: () => void;
 }) {
   const actions = availableActions(row);
 
@@ -150,6 +158,20 @@ function RowMenu({
             View client
           </DropdownMenuItem>
         )}
+        {/* Gestión del servicio, no de esta nota: sólo en cobros que se repiten. */}
+        {actions.includes("changePlan") && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={onChangePlan}>
+              <Pencil className="h-4 w-4 mr-2" />
+              Change plan
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={onCancelService} className="text-destructive">
+              <Ban className="h-4 w-4 mr-2" />
+              Cancel service
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -166,6 +188,10 @@ export default function Collections() {
   const [isCharging, setIsCharging] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isNewOpen, setIsNewOpen] = useState(false);
+  /** Cobro cuyo servicio se está editando; su subscriptionId es lo que se toca. */
+  const [planRow, setPlanRow] = useState<CollectionRow | null>(null);
+  /** Servicio pendiente de baja: cancelar no se deshace desde aquí. */
+  const [toCancel, setToCancel] = useState<CollectionRow | null>(null);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -281,6 +307,22 @@ export default function Collections() {
       toast({ title: "Could not export the list", variant: "destructive" });
     } finally {
       setIsExporting(false);
+    }
+  };
+
+  const confirmCancelService = async () => {
+    if (!toCancel?.subscriptionId) return;
+    try {
+      await subscriptionService.cancelSubscription(toCancel.subscriptionId);
+      toast({
+        title: "Service cancelled",
+        description: "No further charges will be issued. Existing ones stay as they are.",
+      });
+      refreshAll();
+    } catch {
+      toast({ title: "Could not cancel the service", variant: "destructive" });
+    } finally {
+      setToCancel(null);
     }
   };
 
@@ -509,6 +551,8 @@ export default function Collections() {
                           onPdf={() => downloadPdf(row)}
                           onOpenInvoice={() => navigate("/invoices")}
                           onOpenContact={() => navigate(`/contacts/${row.contact?.id}`)}
+                          onChangePlan={() => setPlanRow(row)}
+                          onCancelService={() => setToCancel(row)}
                         />
                       </td>
                     </tr>
@@ -555,6 +599,25 @@ export default function Collections() {
         open={isNewOpen}
         onOpenChange={setIsNewOpen}
         onCreated={refreshAll}
+      />
+
+      <ChangePlanDialog
+        row={planRow}
+        onOpenChange={(open) => !open && setPlanRow(null)}
+        onSaved={refreshAll}
+      />
+
+      <ConfirmDialog
+        open={!!toCancel}
+        onOpenChange={(open) => !open && setToCancel(null)}
+        onConfirm={confirmCancelService}
+        confirmLabel="Cancel service"
+        title="Cancel this service"
+        description={
+          toCancel
+            ? `${toCancel.contact?.name ?? "This client"} will stop being charged for "${toCancel.service ?? "this service"}". Charges already issued stay as they are.`
+            : ""
+        }
       />
 
       <ConfirmDialog

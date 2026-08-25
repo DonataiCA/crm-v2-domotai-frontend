@@ -13,7 +13,9 @@ export type RowAction =
     | 'sendReminder'
     | 'downloadPdf'
     | 'viewInvoice'
-    | 'viewContact';
+    | 'viewContact'
+    | 'changePlan'
+    | 'cancelService';
 
 export function availableActions(row: CollectionRow): RowAction[] {
     const actions: RowAction[] = [];
@@ -30,6 +32,13 @@ export function availableActions(row: CollectionRow): RowAction[] {
     actions.push('downloadPdf', 'viewInvoice');
 
     if (row.contact?.id) actions.push('viewContact');
+
+    // Gestión del servicio, no de esta nota. Sólo tiene sentido en un cobro que se
+    // repite, y sólo si el backend manda el id: ofrecerlo sin él sería un clic que no
+    // puede funcionar. Que la nota esté pagada no congela el plan del servicio.
+    if (row.billingType !== 'ONE_OFF' && row.subscriptionId) {
+        actions.push('changePlan', 'cancelService');
+    }
 
     return actions;
 }

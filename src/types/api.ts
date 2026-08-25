@@ -641,6 +641,8 @@ export interface CollectionRow {
   status: string;
   collectionStatus: CollectionStatus;
   billingType: BillingType;
+  /** Servicio del que nace, si no es un cobro suelto. */
+  subscriptionId: string | null;
   contact: ContactRef | null;
   project: ProjectRef | null;
 }
