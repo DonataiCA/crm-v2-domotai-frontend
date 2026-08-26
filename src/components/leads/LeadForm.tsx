@@ -14,7 +14,8 @@ import { useOrganization } from "@/contexts/OrganizationContext";
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { leadService } from "@/services/lead.service";
-import { companyService } from "@/services/company.service";
+import { CompanySelector } from "@/components/common/CompanySelector";
+import { NO_COMPANY } from "@/lib/company-options";
 import { pipelineService } from "@/services/pipeline.service";
 import type { Lead, Pipeline } from "@/types/api";
 import { Building2 } from "lucide-react";
@@ -30,13 +31,6 @@ export const LeadForm = ({ onSuccess, onCancel, initialData, defaultPipelineId }
   const { toast } = useToast();
   const { currentOrganization } = useOrganization();
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const { data: companiesData } = useQuery({
-    queryKey: ['companies-list'],
-    queryFn: () => companyService.getCompanies(1, 100),
-    enabled: !!currentOrganization,
-  });
-  const companies = companiesData?.data ?? [];
 
   // Fetch dynamic pipeline stages instead of hardcoded
   const { data: pipelines = [] } = useQuery<Pipeline[]>({
@@ -188,29 +182,12 @@ export const LeadForm = ({ onSuccess, onCancel, initialData, defaultPipelineId }
                 <Building2 className="h-3.5 w-3.5" />
                 Company
               </FormLabel>
-              <Select
-                onValueChange={field.onChange}
-                value={field.value || "none"}
-              >
-                <FormControl>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a company (optional)" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  <SelectItem value="none">No company</SelectItem>
-                  {companies.map((company) => (
-                    <SelectItem key={company.id} value={company.id}>
-                      {company.name}
-                      {company.domain && (
-                        <span className="ml-1.5 text-muted-foreground text-xs">
-                          {company.domain}
-                        </span>
-                      )}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FormControl>
+                <CompanySelector
+                  value={field.value || NO_COMPANY}
+                  onChange={field.onChange}
+                />
+              </FormControl>
               <FormMessage />
             </FormItem>
           )}

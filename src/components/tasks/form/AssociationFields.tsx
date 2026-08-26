@@ -3,13 +3,13 @@ import { FormField, FormItem, FormLabel, FormControl } from "@/components/ui/for
 import { useQuery } from "@tanstack/react-query";
 import { contactService } from "@/services/contact.service";
 import { leadService } from "@/services/lead.service";
-import { companyService } from "@/services/company.service";
+import { CompanySelector } from "@/components/common/CompanySelector";
 import { UseFormReturn } from "react-hook-form";
 import { TaskFormValues } from "../types";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { UserSelector } from "@/components/common/UserSelector";
 import { SearchableSelect } from "@/components/common/SearchableSelect";
-import type { ContactRef, LeadRef, Company } from "@/types/api";
+import type { ContactRef, LeadRef } from "@/types/api";
 
 interface AssociationFieldsProps {
   form: UseFormReturn<TaskFormValues>;
@@ -38,19 +38,8 @@ export function AssociationFields({ form }: AssociationFieldsProps) {
     enabled: !!currentOrganization,
   });
 
-  const { data: companiesData, isLoading: isLoadingCompanies } = useQuery({
-    queryKey: ["companies-for-tasks", currentOrganization?.id],
-    queryFn: async () => {
-      if (!currentOrganization) return [];
-      const response = await companyService.getCompanies(1, 100);
-      return response.data || [];
-    },
-    enabled: !!currentOrganization,
-  });
-
   const contacts = contactsData || [];
   const leads = leadsData || [];
-  const companies = companiesData || [];
 
   if (!currentOrganization) {
     return <div className="text-center py-4">Please select an organization to continue</div>;
@@ -69,11 +58,6 @@ export function AssociationFields({ form }: AssociationFieldsProps) {
     ...leads.map((l: LeadRef) => ({ value: l.id, label: l.name })),
   ];
 
-  const companyOptions = [
-    { value: "none", label: "None" },
-    ...companies.map((c: Company) => ({ value: c.id, label: c.name })),
-  ];
-
   return (
     <div className="space-y-4">
       <h3 className="text-lg font-medium">Associated With</h3>
@@ -88,13 +72,10 @@ export function AssociationFields({ form }: AssociationFieldsProps) {
             <FormItem>
               <FormLabel>Company</FormLabel>
               <FormControl>
-                <SearchableSelect
-                  options={companyOptions}
+                <CompanySelector
                   value={field.value || "none"}
                   onChange={(val) => field.onChange(val === "none" ? "" : val)}
                   placeholder="Select company"
-                  searchPlaceholder="Search companies..."
-                  disabled={isLoadingCompanies}
                 />
               </FormControl>
             </FormItem>

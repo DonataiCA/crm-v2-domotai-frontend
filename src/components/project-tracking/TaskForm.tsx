@@ -18,6 +18,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { CalendarIcon } from "lucide-react";
 import { format, parseISO } from "date-fns";
+import { TASK_PRIORITY_OPTIONS } from "@/constants";
 import { useToast } from "@/hooks/use-toast";
 import { projectService } from "@/services/project.service";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -241,9 +242,11 @@ export const TaskForm = ({ projectId, phases, initialData, onSuccess }: TaskForm
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                     {...field}
                   >
-                    <option value="LOW">Low</option>
-                    <option value="MEDIUM">Medium</option>
-                    <option value="HIGH">High</option>
+                    {TASK_PRIORITY_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
                   </select>
                 </FormControl>
                 <FormMessage />
