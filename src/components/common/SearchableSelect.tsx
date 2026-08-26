@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +30,15 @@ interface SearchableSelectProps {
   emptyText?: string;
   disabled?: boolean;
   className?: string;
+  /**
+   * Búsqueda contra el servidor. Al pasarlo, cmdk deja de filtrar por su
+   * cuenta: el filtrado local sólo ve las opciones ya descargadas, así que
+   * sobre una lista truncada respondería "sin resultados" para registros que
+   * sí existen. Sin este prop el componente se comporta como siempre.
+   */
+  onSearchChange?: (search: string) => void;
+  searchValue?: string;
+  loading?: boolean;
 }
 
 export function SearchableSelect({
@@ -41,10 +50,14 @@ export function SearchableSelect({
   emptyText = "No results found.",
   disabled = false,
   className,
+  onSearchChange,
+  searchValue,
+  loading = false,
 }: SearchableSelectProps) {
   const [open, setOpen] = React.useState(false);
 
   const selected = options.find((opt) => opt.value === value);
+  const serverSide = Boolean(onSearchChange);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -65,15 +78,27 @@ export function SearchableSelect({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-        <Command>
-          <CommandInput placeholder={searchPlaceholder} />
+        <Command shouldFilter={!serverSide}>
+          <CommandInput
+            placeholder={searchPlaceholder}
+            {...(serverSide ? { value: searchValue, onValueChange: onSearchChange } : {})}
+          />
           <CommandList>
-            <CommandEmpty>{emptyText}</CommandEmpty>
+            <CommandEmpty>
+              {loading ? (
+                <span className="flex items-center justify-center gap-2 py-1">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  Searching...
+                </span>
+              ) : (
+                emptyText
+              )}
+            </CommandEmpty>
             <CommandGroup>
               {options.map((option) => (
                 <CommandItem
                   key={option.value}
-                  value={option.label}
+                  value={serverSide ? option.value : option.label}
                   onSelect={() => {
                     onChange(option.value);
                     setOpen(false);
