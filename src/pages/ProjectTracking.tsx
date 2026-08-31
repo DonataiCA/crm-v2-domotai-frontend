@@ -17,6 +17,7 @@ import { TaskFileImport } from "@/components/project-tracking/TaskFileImport";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ShareProjectDialog } from "@/components/projects/ShareProjectDialog";
 import { ProjectReposManager } from "@/components/projects/ProjectReposManager";
+import { ProjectLinksManager } from "@/components/project-tracking/ProjectLinksManager";
 import type { Project, ProjectPhase, ProjectTask, GitMetric, GitCommit } from '@/types/api';
 import { canEditProjects } from '@/constants';
 
@@ -253,6 +254,7 @@ const ProjectTracking = () => {
             <TabsTrigger value="kanban">Kanban Board</TabsTrigger>
             <TabsTrigger value="gantt">Gantt Chart</TabsTrigger>
             <TabsTrigger value="repos">Repositories</TabsTrigger>
+            <TabsTrigger value="links">Links</TabsTrigger>
           </TabsList>
 
           {canEdit && (
@@ -311,6 +313,10 @@ const ProjectTracking = () => {
               isLoading={isLoadingGit}
               onSyncComplete={() => fetchGitMetrics(project, false)}
             />
+          </TabsContent>
+
+          <TabsContent value="links" className="mt-0">
+            <ProjectLinksManager projectId={project.id} canEdit={canEdit} />
           </TabsContent>
         </Tabs>
 

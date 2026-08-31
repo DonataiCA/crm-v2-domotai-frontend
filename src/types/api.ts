@@ -304,6 +304,32 @@ export interface ProjectTaskTag {
   tag: Tag;
 }
 
+export interface TaskDeliverable {
+  id: string;
+  projectTaskId: string;
+  organizationId: string;
+  title: string;
+  done: boolean;
+  doneAt: string | null;
+  orderIndex: number;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectLink {
+  id: string;
+  projectId: string;
+  organizationId: string;
+  title: string;
+  url: string;
+  description: string | null;
+  orderIndex: number;
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ProjectTask {
   id: string;
   projectId: string | null;
@@ -330,6 +356,8 @@ export interface ProjectTask {
   phase: PhaseRef | null;
   taskTags?: ProjectTaskTag[];
   comments?: TaskComment[];
+  progress: number;
+  deliverables?: TaskDeliverable[];
 }
 
 export interface ProjectPhase {
@@ -849,6 +877,7 @@ export interface ProjectTaskPayload {
   dueDate?: string | null;
   completedAt?: string | null;
   assignedTo?: string | null;
+  progress?: number;
 }
 
 export interface ProjectPhasePayload {

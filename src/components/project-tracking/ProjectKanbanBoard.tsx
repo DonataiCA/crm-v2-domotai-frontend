@@ -26,6 +26,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { TaskForm } from "./TaskForm";
 import { PhaseForm } from "./PhaseForm";
 import { TaskCommentSection } from "./TaskCommentSection";
+import { TaskDeliverableSection } from "./TaskDeliverableSection";
+import { TaskProgressSection } from "./TaskProgressSection";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import {
   DropdownMenu,
@@ -462,6 +464,19 @@ export const ProjectKanbanBoard = ({
                                   {task.assignee.fullName}
                                 </div>
                               )}
+                              {(task.progress ?? 0) > 0 && (
+                                <div className="flex items-center gap-2 mt-1.5">
+                                  <div className="flex-1 bg-muted rounded-full h-1.5">
+                                    <div
+                                      className="bg-primary h-1.5 rounded-full"
+                                      style={{ width: `${task.progress}%` }}
+                                    />
+                                  </div>
+                                  <span className="text-[10px] text-muted-foreground tabular-nums">
+                                    {task.progress}%
+                                  </span>
+                                </div>
+                              )}
                               {/* Conclusion indicator */}
                               {task.status === 'COMPLETED' && task.conclusion && (
                                 <div className="flex items-center text-[11px] text-emerald-600 mt-1" title="Conclusion documented">
@@ -657,6 +672,20 @@ export const ProjectKanbanBoard = ({
                   Created {format(parseISO(viewingTask.createdAt), 'MMM d, yyyy HH:mm')}
                 </p>
               )}
+              {/* Progress */}
+              <TaskProgressSection
+                taskId={viewingTask.id}
+                progress={viewingTask.progress ?? 0}
+                canEdit={canEdit}
+                onChange={() => onRefresh?.()}
+              />
+              {/* Deliverables */}
+              <TaskDeliverableSection
+                taskId={viewingTask.id}
+                deliverables={viewingTask.deliverables || []}
+                canEdit={canEdit}
+                onChange={() => onRefresh?.()}
+              />
               {/* Comments */}
               <TaskCommentSection
                 taskId={viewingTask.id}

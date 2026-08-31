@@ -39,25 +39,38 @@ const CONTINUATION_TAIL_PX = 22;
 // overflow — so the dots never add width to the row.
 const BarFill = ({
   colorClass,
-  continuesAfter
+  continuesAfter,
+  progress
 }: {
   colorClass: string;
   continuesAfter: boolean;
-}) => (
-  <>
-    <div
-      className={`absolute inset-y-0 left-0 rounded ${colorClass}`}
-      style={{ right: continuesAfter ? CONTINUATION_TAIL_PX : 0 }}
-    />
-    {continuesAfter && (
-      <div className="absolute inset-y-0 right-0.5 flex items-center gap-[3px]">
-        <span className={`h-1 w-1 rounded-full ${colorClass}`} />
-        <span className={`h-1 w-1 rounded-full ${colorClass}`} />
-        <span className={`h-1 w-1 rounded-full ${colorClass}`} />
-      </div>
-    )}
-  </>
-);
+  progress?: number;
+}) => {
+  // A partial completion dims the base bar and paints a solid fill up to the percentage,
+  // so the split reads at a glance. 0 and 100 keep the solid bar untouched.
+  const showProgress = typeof progress === 'number' && progress > 0 && progress < 100;
+  return (
+    <>
+      <div
+        className={`absolute inset-y-0 left-0 rounded ${colorClass} ${showProgress ? 'opacity-40' : ''}`}
+        style={{ right: continuesAfter ? CONTINUATION_TAIL_PX : 0 }}
+      />
+      {showProgress && (
+        <div
+          className={`absolute inset-y-0 left-0 rounded-l ${colorClass}`}
+          style={{ width: `${progress}%` }}
+        />
+      )}
+      {continuesAfter && (
+        <div className="absolute inset-y-0 right-0.5 flex items-center gap-[3px]">
+          <span className={`h-1 w-1 rounded-full ${colorClass}`} />
+          <span className={`h-1 w-1 rounded-full ${colorClass}`} />
+          <span className={`h-1 w-1 rounded-full ${colorClass}`} />
+        </div>
+      )}
+    </>
+  );
+};
 
 interface ProjectGanttChartProps {
   projectId: string;
@@ -643,6 +656,7 @@ export const ProjectGanttChart = ({
                                 <BarFill
                                   colorClass={getTaskColor(task)}
                                   continuesAfter={taskPos.continuesAfter}
+                                  progress={task.progress ?? 0}
                                 />
                               </div>
                             </TooltipTrigger>
@@ -658,6 +672,9 @@ export const ProjectGanttChart = ({
                                   <Badge>{task.priority}</Badge>
                                 )}
                               </div>
+                              {(task.progress ?? 0) > 0 && (
+                                <div className="text-xs mt-1">Progress: {task.progress}%</div>
+                              )}
                               {task.description && (
                                 <div className="text-xs max-w-xs mt-1">{task.description}</div>
                               )}
@@ -696,6 +713,7 @@ export const ProjectGanttChart = ({
                                 <BarFill
                                   colorClass={getTaskColor(task)}
                                   continuesAfter={taskPos.continuesAfter}
+                                  progress={task.progress ?? 0}
                                 />
                               </div>
                             </TooltipTrigger>
@@ -709,6 +727,9 @@ export const ProjectGanttChart = ({
                                 <Badge variant="outline">{task.status}</Badge>
                                 {task.priority && <Badge>{task.priority}</Badge>}
                               </div>
+                              {(task.progress ?? 0) > 0 && (
+                                <div className="text-xs mt-1">Progress: {task.progress}%</div>
+                              )}
                             </TooltipContent>
                           </Tooltip>
                         )}

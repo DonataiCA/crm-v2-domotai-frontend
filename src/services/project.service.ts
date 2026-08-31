@@ -10,6 +10,8 @@ import {
   PaginatedResponse,
   TaskComment,
   ImportTasksResponse,
+  TaskDeliverable,
+  ProjectLink,
 } from '@/types/api';
 
 export const projectService = {
@@ -131,6 +133,54 @@ export const projectService = {
 
   deleteTaskComment: async (commentId: string): Promise<void> => {
     await api.delete(`/projects/project-tasks/comments/${commentId}`);
+  },
+
+  // ─── Task Deliverables ─────────────────────────────────────────────────
+
+  createDeliverable: async (taskId: string, title: string): Promise<TaskDeliverable> => {
+    const { data } = await api.post<TaskDeliverable>(`/projects/project-tasks/${taskId}/deliverables`, { title });
+    return data;
+  },
+
+  updateDeliverable: async (deliverableId: string, payload: { title?: string; done?: boolean }): Promise<TaskDeliverable> => {
+    const { data } = await api.put<TaskDeliverable>(`/projects/project-tasks/deliverables/${deliverableId}`, payload);
+    return data;
+  },
+
+  deleteDeliverable: async (deliverableId: string): Promise<void> => {
+    await api.delete(`/projects/project-tasks/deliverables/${deliverableId}`);
+  },
+
+  // ─── Project Links ─────────────────────────────────────────────────────
+
+  getLinks: async (projectId: string): Promise<ProjectLink[]> => {
+    const { data } = await api.get<ProjectLink[]>(`/projects/${projectId}/links`);
+    return data;
+  },
+
+  createLink: async (
+    projectId: string,
+    payload: { title: string; url: string; description?: string | null },
+  ): Promise<ProjectLink> => {
+    const { data } = await api.post<ProjectLink>(`/projects/${projectId}/links`, payload);
+    return data;
+  },
+
+  updateLink: async (
+    projectId: string,
+    linkId: string,
+    payload: { title?: string; url?: string; description?: string | null },
+  ): Promise<ProjectLink> => {
+    const { data } = await api.put<ProjectLink>(`/projects/${projectId}/links/${linkId}`, payload);
+    return data;
+  },
+
+  deleteLink: async (projectId: string, linkId: string): Promise<void> => {
+    await api.delete(`/projects/${projectId}/links/${linkId}`);
+  },
+
+  reorderLinks: async (projectId: string, orderedIds: string[]): Promise<void> => {
+    await api.put(`/projects/${projectId}/links/reorder`, { orderedIds });
   },
 
   // ─── Contacts ────────────────────────────────────────────────────────────
