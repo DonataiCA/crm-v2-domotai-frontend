@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ProjectStatus, normalizeProjectStatus, isProjectInProgress } from "@/constants";
+import { ProjectStatus, normalizeProjectStatus, isProjectInProgress, canEditProjects } from "@/constants";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +53,8 @@ const ProjectDashboard = () => {
   const { currentOrganization } = useOrganization();
   const { userRole } = useAuth();
   const isClient = userRole?.toLowerCase() === 'client';
+  // Crear y editar es del equipo; un PMO (o un viewer que llegue por URL) solo mira.
+  const canEdit = canEditProjects(userRole);
   const [newProjectOpen, setNewProjectOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
@@ -176,7 +178,7 @@ const ProjectDashboard = () => {
           <h1 className="text-3xl font-bold">{isClient ? 'My Projects' : 'Projects'}</h1>
           <p className="text-muted-foreground mt-1">{currentOrganization.name}</p>
         </div>
-        {!isClient && (
+        {canEdit && (
           <Dialog open={newProjectOpen} onOpenChange={setNewProjectOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -356,7 +358,7 @@ const ProjectDashboard = () => {
           // mientras que el cliente ya venía directo aquí.
           onProjectClick={(project) => navigate(`/projects/${project.id}/tracking`)}
           // El lápiz sólo se pasa al equipo: sin la prop, la tabla no lo pinta.
-          onEditClick={isClient ? undefined : (project) => {
+          onEditClick={!canEdit ? undefined : (project) => {
             setSelectedProject(project);
             setIsDetailsOpen(true);
           }}

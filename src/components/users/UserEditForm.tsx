@@ -144,6 +144,7 @@ export function UserEditForm({ user, open, onOpenChange }: UserEditFormProps) {
                       <SelectItem value="admin">Admin</SelectItem>
                       <SelectItem value="salesman">Salesman</SelectItem>
                       <SelectItem value="freelancer">Freelancer</SelectItem>
+                      <SelectItem value="pmo">PMO</SelectItem>
                       <SelectItem value="client">Client</SelectItem>
                       <SelectItem value="viewer">Viewer</SelectItem>
                     </SelectContent>

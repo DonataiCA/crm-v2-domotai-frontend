@@ -77,6 +77,7 @@ const ROLE_COLORS: Record<string, string> = {
   [UserRole.SALESMAN]: 'bg-blue-500 hover:bg-blue-600',
   [UserRole.ADMIN]: 'bg-purple-500 hover:bg-purple-600',
   [UserRole.FREELANCER]: 'bg-green-500 hover:bg-green-600',
+  [UserRole.PMO]: 'bg-amber-500 hover:bg-amber-600',
 };
 
 export function getUserRoleBgColor(role: string): string {

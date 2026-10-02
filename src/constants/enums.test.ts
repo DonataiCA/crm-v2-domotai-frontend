@@ -58,8 +58,8 @@ describe('normalizeRole', () => {
 });
 
 describe('catálogo', () => {
-  it('declara los cinco roles de perfil en minúscula', () => {
-    expect(PROFILE_ROLES.sort()).toEqual(['admin', 'client', 'freelancer', 'salesman', 'viewer']);
+  it('declara los seis roles de perfil en minúscula', () => {
+    expect(PROFILE_ROLES.sort()).toEqual(['admin', 'client', 'freelancer', 'pmo', 'salesman', 'viewer']);
   });
 
   it('declara los tres roles de organización', () => {

@@ -135,6 +135,7 @@ export const UserRole = {
   ADMIN: 'admin',
   SALESMAN: 'salesman',
   FREELANCER: 'freelancer',
+  PMO: 'pmo',
   CLIENT: 'client',
   VIEWER: 'viewer',
 } as const;
@@ -145,6 +146,7 @@ export const USER_ROLE_OPTIONS: Array<{ value: UserRoleType; label: string }> = 
   { value: UserRole.ADMIN, label: 'Admin' },
   { value: UserRole.SALESMAN, label: 'Salesman' },
   { value: UserRole.FREELANCER, label: 'Freelancer' },
+  { value: UserRole.PMO, label: 'PMO' },
   { value: UserRole.CLIENT, label: 'Client' },
   { value: UserRole.VIEWER, label: 'Viewer' },
 ];
@@ -180,6 +182,15 @@ export function isClientRole(role: string | null | undefined): boolean {
 
 export function isViewerRole(role: string | null | undefined): boolean {
   return normalizeRole(role) === UserRole.VIEWER;
+}
+
+/**
+ * PMO: supervisa todos los proyectos de la organización en modo lectura.
+ * No es rol de equipo (no edita, no cuenta como recurso de capacidad) ni
+ * cliente (no se filtra por shares: ve el catálogo completo).
+ */
+export function isPmoRole(role: string | null | undefined): boolean {
+  return normalizeRole(role) === UserRole.PMO;
 }
 
 /** true para admin, salesman y freelancer. */

@@ -16,7 +16,7 @@ const userFormSchema = z.object({
   email: z.string().email("Please enter a valid email address"),
   full_name: z.string().min(1, "Full name is required"),
   phone: z.string().optional(),
-  role: z.enum(["salesman", "freelancer"]),
+  role: z.enum(["salesman", "freelancer", "pmo"]),
   password: z.string().min(6, "Password must be at least 6 characters").optional(),
 });
 
@@ -149,6 +149,7 @@ export function UserForm({ open, onOpenChange }: UserFormProps) {
                     <SelectContent>
                       <SelectItem value="freelancer">Freelancer</SelectItem>
                       <SelectItem value="salesman">Salesman</SelectItem>
+                      <SelectItem value="pmo">PMO</SelectItem>
                     </SelectContent>
                   </Select>
                   <FormMessage />

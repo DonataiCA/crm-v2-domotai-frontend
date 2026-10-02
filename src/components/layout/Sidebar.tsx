@@ -33,7 +33,7 @@ import { OrganizationSelector } from "@/components/organizations/OrganizationSel
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ChangePasswordForm } from "@/components/auth/ChangePasswordForm";
-import { UserRole, isClientRole, isViewerRole, normalizeRole } from "@/constants";
+import { UserRole, isClientRole, isViewerRole, isPmoRole, normalizeRole } from "@/constants";
 
 const SIDEBAR_COLLAPSED_KEY = "sidebar-collapsed";
 
@@ -77,6 +77,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
   const isClient = isClientRole(userRole);
   const isViewer = isViewerRole(userRole);
   const isFreelancer = normalizeRole(userRole) === UserRole.FREELANCER;
+  const isPmo = isPmoRole(userRole);
 
   const isActive = (path: string) => {
     if (path === "/") return location.pathname === "/";
@@ -143,7 +144,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="space-y-1">
-            {(isClient
+            {(isClient || isPmo
               ? navItems.filter(i => i.path === '/project-dashboard')
               : isViewer
               ? navItems.filter(i => i.path === '/')
@@ -188,7 +189,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
           </ul>
 
           {/* Operations divider */}
-          {!isClient && !isViewer && !isFreelancer && (
+          {!isClient && !isViewer && !isFreelancer && !isPmo && (
             <>
             <div className="my-4 border-t border-slate-700/50" />
             {!collapsed && (
@@ -199,7 +200,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
             </>
           )}
           <ul className="space-y-1">
-            {(isClient || isViewer || isFreelancer ? [] : opsItems).map((item) => {
+            {(isClient || isViewer || isFreelancer || isPmo ? [] : opsItems).map((item) => {
               const active = isActive(item.path);
               const linkContent = (
                 <Link
@@ -235,7 +236,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
           </ul>
 
           {/* Settings divider */}
-          {!isClient && !isViewer && !isFreelancer && (
+          {!isClient && !isViewer && !isFreelancer && !isPmo && (
             <>
             <div className="my-4 border-t border-slate-700/50" />
             {!collapsed && (
@@ -246,7 +247,7 @@ export function Sidebar({ collapsed, onToggle, mobileOpen, onMobileClose }: Side
             </>
           )}
           <ul className="space-y-1">
-            {(isClient || isViewer || isFreelancer ? [] : settingsItems).map((item) => {
+            {(isClient || isViewer || isFreelancer || isPmo ? [] : settingsItems).map((item) => {
               const active = isActive(item.path);
               const linkContent = (
                 <Link

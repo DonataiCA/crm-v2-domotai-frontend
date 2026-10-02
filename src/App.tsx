@@ -34,7 +34,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { ErrorBoundary } from "@/components/common/ErrorBoundary";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { isClientRole, isViewerRole } from "@/constants";
+import { isClientRole, isViewerRole, isPmoRole } from "@/constants";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -61,6 +61,7 @@ const NavToAuth = () => {
 const TeamOnly = ({ children }: { children: React.ReactNode }) => {
   const { userRole } = useAuth();
   if (isClientRole(userRole)) return <Navigate to="/project-dashboard" replace />;
+  if (isPmoRole(userRole)) return <Navigate to="/project-dashboard" replace />;
   if (isViewerRole(userRole)) return <Navigate to="/" replace />;
   return <>{children}</>;
 };
@@ -68,6 +69,8 @@ const TeamOnly = ({ children }: { children: React.ReactNode }) => {
 const AppRoutes = () => {
   const { session, userRole, isLoading } = useAuth();
   const isClient = isClientRole(userRole);
+  // El PMO vive en el mundo de proyectos: su home es el dashboard de proyectos.
+  const isPmo = isPmoRole(userRole);
 
   if (isLoading) {
     return (
@@ -87,7 +90,7 @@ const AppRoutes = () => {
         path="/"
         element={
           session
-            ? isClient
+            ? isClient || isPmo
               ? <Navigate to="/project-dashboard" replace />
               : <WithLayout><Dashboard /></WithLayout>
             : <NavToAuth />
