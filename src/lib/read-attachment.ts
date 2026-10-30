@@ -43,7 +43,6 @@ const extensionOf = (fileName: string): string => {
   return dot === -1 ? '' : fileName.slice(dot).toLowerCase();
 };
 
-const accepted = ACCEPTED_DOCUMENT_EXTENSIONS.join(' o ');
 
 /**
  * `maxChars` es un parámetro y no una constante porque hay dos consumidores con topes muy
@@ -54,10 +53,11 @@ const accepted = ACCEPTED_DOCUMENT_EXTENSIONS.join(' o ');
 export async function readAttachment(
   file: File,
   maxChars: number = MAX_DOCUMENT_CHARS,
+  /** El import de tareas acepta además `.json`; el chat no, por eso es un parámetro. */
+  allowed: readonly string[] = ACCEPTED_DOCUMENT_EXTENSIONS,
 ): Promise<ReadResult> {
   const extension = extensionOf(file.name);
-
-  const allowed: readonly string[] = ACCEPTED_DOCUMENT_EXTENSIONS;
+  const accepted = allowed.join(' o ');
 
   if (!allowed.includes(extension)) {
     return {

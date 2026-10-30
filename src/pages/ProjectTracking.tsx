@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { projectService } from "@/services/project.service";
 import { githubService } from "@/services/github.service";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2, ArrowLeft, AlertCircle, Bot, Upload, X, FileText, Share2 } from "lucide-react";
+import { Loader2, ArrowLeft, AlertCircle, Bot, Upload, X, FileText, Share2, Download } from "lucide-react";
 import { ProjectKanbanBoard } from "@/components/project-tracking/ProjectKanbanBoard";
 import { ProjectGanttChart } from "@/components/project-tracking/ProjectGanttChart";
 import { ProjectPRDPanel } from "@/components/project-tracking/ProjectPRDPanel";
@@ -41,6 +41,23 @@ const ProjectTracking = () => {
   const [importOpen, setImportOpen] = useState(false);
   const [isGeneratingFromPrd, setIsGeneratingFromPrd] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  // El panel de importar se ensancha cuando enseña la vista previa del JSON.
+  const [importPreviewOpen, setImportPreviewOpen] = useState(false);
+  const handleImportPreviewChange = useCallback((open: boolean) => setImportPreviewOpen(open), []);
+
+  /** Descarga `tasks-<proyecto>-<fecha>.json` para trabajarlo fuera y reimportarlo. */
+  const handleExport = async () => {
+    if (!projectId || isExporting) return;
+    setIsExporting(true);
+    try {
+      await projectService.exportTasks(projectId);
+    } catch {
+      toast({ title: "No se pudieron exportar las tareas", variant: "destructive" });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const canEdit = canEditProjects(userRole || '');
   const needsSetup = (!phases || phases.length === 0) && (!tasks || tasks.length === 0);
@@ -211,6 +228,12 @@ const ProjectTracking = () => {
 
           <div className="flex items-center gap-2">
             {canEdit && (
+              <Button onClick={handleExport} size="sm" variant="outline" disabled={isExporting}>
+                {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
+                Exportar
+              </Button>
+            )}
+            {canEdit && (
               <Button onClick={() => setShareOpen(true)} size="sm" variant="outline">
                 <Share2 className="h-4 w-4 mr-2" />
                 Invite Client
@@ -322,13 +345,20 @@ const ProjectTracking = () => {
 
       {/* Panel de importación — entra desde la derecha */}
       {importOpen && (
-        <div className="fixed top-0 right-0 h-full w-[400px] bg-card border-l shadow-xl z-40 flex flex-col">
+        <div
+          className={`fixed top-0 right-0 h-full ${importPreviewOpen ? "w-[640px]" : "w-[400px]"} max-w-full bg-card border-l shadow-xl z-40 flex flex-col transition-[width]`}
+        >
           <div className="flex items-center justify-between p-3 border-b bg-muted/30">
             <div className="flex items-center gap-2">
               <Upload className="h-4 w-4 text-primary" />
               <span className="font-semibold text-sm">Importar tareas desde archivo</span>
             </div>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setImportOpen(false)}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7"
+              onClick={() => { setImportOpen(false); setImportPreviewOpen(false); }}
+            >
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -336,6 +366,7 @@ const ProjectTracking = () => {
             projectId={projectId || ''}
             phases={phases}
             onTasksImported={refreshTrackingData}
+            onPreviewChange={handleImportPreviewChange}
           />
         </div>
       )}

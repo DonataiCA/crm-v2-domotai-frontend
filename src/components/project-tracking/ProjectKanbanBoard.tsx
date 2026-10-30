@@ -24,6 +24,7 @@ import { tagService } from "@/services/tag.service";
 import { useOrganization } from "@/contexts/OrganizationContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { TaskForm } from "./TaskForm";
+import { columnTasks, moveTask } from "./kanban-order";
 import { PhaseForm } from "./PhaseForm";
 import { TaskCommentSection } from "./TaskCommentSection";
 import { TaskDeliverableSection } from "./TaskDeliverableSection";
@@ -117,19 +118,9 @@ export const ProjectKanbanBoard = ({
 
   const sortedPhases = [...phases].sort((a, b) => (a.orderIndex || 0) - (b.orderIndex || 0));
 
-  const getTasksByStatus = (status: string) => {
-    return tasks
-      .filter(task => {
-        if (task.status !== status) return false;
-        if (selectedPhaseFilter && (task as any).phase_id !== selectedPhaseFilter && task.phaseId !== selectedPhaseFilter) return false;
-        if (selectedTagFilter.length > 0) {
-          const taskTagIds = (task.taskTags || []).map(tt => tt.tag?.id || tt.tagId);
-          if (!selectedTagFilter.some(tagId => taskTagIds.includes(tagId))) return false;
-        }
-        return true;
-      })
-      .sort((a, b) => ((a as any).order_index || a.orderIndex || 0) - ((b as any).order_index || b.orderIndex || 0));
-  };
+  const filters = { phaseId: selectedPhaseFilter, tagIds: selectedTagFilter };
+
+  const getTasksByStatus = (status: string) => columnTasks(tasks, status, filters);
 
   const getPhaseNameForTask = (task: ProjectTask) => {
     const pid = (task as any).phase_id || task.phaseId;
@@ -144,37 +135,34 @@ export const ProjectKanbanBoard = ({
     const { source, destination, draggableId, type } = result;
 
     if (type === 'task') {
-      const updatedTasks = [...tasks];
-      const taskIndex = updatedTasks.findIndex(t => t.id === draggableId);
+      if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
-      if (taskIndex === -1) return;
+      const before = tasks.find(t => t.id === draggableId);
+      if (!before) return;
+      // Clientes pueden cambiar el estado pero no el orden: el reorder es sólo del equipo.
+      if (!isTeam && source.droppableId === destination.droppableId) return;
 
-      const task = { ...updatedTasks[taskIndex] };
-      const newStatus = destination.droppableId;
-      task.status = newStatus;
-
-      if (newStatus === 'COMPLETED' && !task.completedAt) {
-        task.completedAt = new Date().toISOString();
-      }
-
-      if (newStatus !== 'COMPLETED') {
-        task.completedAt = null;
-      }
-
-      updatedTasks.splice(taskIndex, 1);
-      updatedTasks.splice(destination.index, 0, task);
+      const { tasks: updatedTasks, orderedIds } = moveTask(
+        tasks,
+        { taskId: draggableId, toStatus: destination.droppableId, toIndex: destination.index },
+        filters,
+      );
+      const after = updatedTasks.find(t => t.id === draggableId)!;
+      onTasksChange(updatedTasks);
 
       try {
-        await projectService.updateProjectTask(task.id, {
-          status: task.status,
-          completedAt: task.completedAt
-        });
-
-        onTasksChange(updatedTasks);
+        if (after.status !== before.status) {
+          await projectService.updateProjectTask(after.id, {
+            status: after.status,
+            completedAt: after.completedAt,
+          });
+        }
+        if (isTeam) await projectService.reorderProjectTasks(projectId, orderedIds);
       } catch (error) {
+        onTasksChange(tasks);
         toast({
           title: 'Error',
-          description: 'Failed to update task status',
+          description: 'Failed to move task',
           variant: 'destructive'
         });
       }

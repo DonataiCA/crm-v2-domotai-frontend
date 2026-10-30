@@ -148,3 +148,20 @@ describe('readAttachment — tope de caracteres configurable', () => {
         expect((await readAttachment(file('a'.repeat(MAX_DOCUMENT_CHARS)))).ok).toBe(true);
     });
 });
+
+describe('readAttachment — extensiones a medida', () => {
+    it('el import de tareas acepta .json; el chat no', async () => {
+        const { TASK_IMPORT_EXTENSIONS, MAX_SYNC_FILE_CHARS } = await import('@/constants/document');
+        const json = file('{"format":"crm-domotai-tasks"}', 'tasks-andina-2026-10-30.json');
+
+        expect((await readAttachment(json)).ok).toBe(false);
+        const result = await readAttachment(json, MAX_SYNC_FILE_CHARS, TASK_IMPORT_EXTENSIONS);
+        expect(result.ok).toBe(true);
+    });
+
+    it('el error nombra las extensiones que sí se aceptan', async () => {
+        const { TASK_IMPORT_EXTENSIONS } = await import('@/constants/document');
+        const result = await readAttachment(file('x', 'a.pdf'), MAX_TEMPLATE_CHARS, TASK_IMPORT_EXTENSIONS);
+        expect(!result.ok && result.error).toContain('.json');
+    });
+});

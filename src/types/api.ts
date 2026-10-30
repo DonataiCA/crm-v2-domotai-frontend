@@ -643,6 +643,54 @@ export interface ImportTasksResponse {
   warnings?: TemplateIssue[];
 }
 
+// ─── Exportar / importar tareas en JSON ─────────────────────────────────────
+
+/** Problema del archivo JSON, localizado por su ruta (`tasks[3].dueDate`). */
+export interface TaskSyncIssue {
+  path: string;
+  taskTitle?: string;
+  message: string;
+}
+
+/** Un cambio de un campo, ya con nombres (área, email), no ids. */
+export interface TaskSyncFieldChange {
+  field: string;
+  before: string | number | null;
+  after: string | number | null;
+}
+
+export interface TaskSyncSummary {
+  creates: number;
+  updates: number;
+  deletes: number;
+  moves: number;
+  conflicts: number;
+  tagsToCreate: number;
+}
+
+/**
+ * Respuesta de `POST /projects/:id/tasks/sync/preview`: lo que cambiaría, sin haber
+ * escrito nada. Se confirma mandando el mismo archivo con su `planHash`.
+ */
+export interface TaskSyncPlan {
+  creates: Array<{ ref: number; title: string; data: { status: string; priority: string; assignedTo: string | null }; tagNames: string[] }>;
+  updates: Array<{ taskId: string; title: string; changes: TaskSyncFieldChange[]; conflict: boolean }>;
+  deletes: Array<{ taskId: string; title: string; conflict: boolean }>;
+  moves: string[];
+  tagsToCreate: string[];
+  issues: TaskSyncIssue[];
+  warnings: TaskSyncIssue[];
+  summary: TaskSyncSummary;
+  planHash: string;
+}
+
+/** Respuesta de `POST /projects/:id/tasks/sync/apply`. */
+export interface TaskSyncApplyResponse {
+  applied: Omit<TaskSyncSummary, 'conflicts'>;
+  skippedConflicts: string[];
+  warnings: TaskSyncIssue[];
+}
+
 // ─── Cobranzas ──────────────────────────────────────────────────────────────
 
 /**

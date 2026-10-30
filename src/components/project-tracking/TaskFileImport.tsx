@@ -5,10 +5,11 @@ import { useToast } from "@/hooks/use-toast";
 import { projectService } from "@/services/project.service";
 import { readAttachment, type Attachment } from "@/lib/read-attachment";
 import {
-  ACCEPTED_DOCUMENT_EXTENSIONS,
-  DOCUMENT_ACCEPT_ATTRIBUTE,
+  MAX_SYNC_FILE_CHARS,
   MAX_TEMPLATE_CHARS,
   MAX_TEMPLATE_TASKS,
+  TASK_IMPORT_ACCEPT_ATTRIBUTE,
+  TASK_IMPORT_EXTENSIONS,
 } from "@/constants/document";
 import {
   getPriorityBadgeVariant,
@@ -30,8 +31,17 @@ import {
   User,
   X,
 } from "lucide-react";
-import type { ProjectPhase, ProjectTask, ProjectTeamMember, TemplateIssue } from "@/types/api";
+import type {
+  ProjectPhase,
+  ProjectTask,
+  ProjectTeamMember,
+  TaskSyncIssue,
+  TaskSyncPlan,
+  TemplateIssue,
+} from "@/types/api";
 import { buildAiPrompt } from "./task-import-prompt";
+import { TaskSyncIssues, TaskSyncPreview } from "./TaskSyncPreview";
+import { summaryParts } from "./task-sync-preview";
 
 /**
  * Alta de tareas subiendo un archivo `.md` o `.txt` con la plantilla del CRM.
@@ -49,7 +59,12 @@ import { buildAiPrompt } from "./task-import-prompt";
 /** El archivo se sirve como estático desde `public/`. */
 const TEMPLATE_URL = "/plantilla-tareas.md";
 
-const extensions = ACCEPTED_DOCUMENT_EXTENSIONS.join(" o ");
+const extensions = TASK_IMPORT_EXTENSIONS.join(", ");
+
+/** El JSON exportado del CRM sincroniza; el Markdown/texto de la plantilla sólo crea. */
+const isSyncFile = (fileName: string) => fileName.toLowerCase().endsWith(".json");
+
+type HttpError = { response?: { status?: number; data?: { issues?: TaskSyncIssue[]; plan?: TaskSyncPlan; message?: string } } };
 
 type TaskWithPhase = ProjectTask & { phase?: { id: string; name: string } | null };
 
@@ -58,9 +73,11 @@ interface TaskFileImportProps {
   /** Las áreas del proyecto; el prompt para la IA se arma con sus nombres. */
   phases: ProjectPhase[];
   onTasksImported: () => void;
+  /** Avisa cuando hay vista previa, para que el panel se ensanche. */
+  onPreviewChange?: (open: boolean) => void;
 }
 
-export const TaskFileImport = ({ projectId, phases, onTasksImported }: TaskFileImportProps) => {
+export const TaskFileImport = ({ projectId, phases, onTasksImported, onPreviewChange }: TaskFileImportProps) => {
   const [attachment, setAttachment] = useState<Attachment | null>(null);
   const [readError, setReadError] = useState<string | null>(null);
   const [issues, setIssues] = useState<TemplateIssue[]>([]);
@@ -69,6 +86,18 @@ export const TaskFileImport = ({ projectId, phases, onTasksImported }: TaskFileI
   const [imported, setImported] = useState<TaskWithPhase[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  // Import JSON: vista previa, conflictos elegidos y errores por ruta.
+  const [plan, setPlan] = useState<TaskSyncPlan | null>(null);
+  const [applyConflicts, setApplyConflicts] = useState<string[]>([]);
+  const [syncIssues, setSyncIssues] = useState<TaskSyncIssue[]>([]);
+
+  useEffect(() => { onPreviewChange?.(plan !== null); }, [plan, onPreviewChange]);
+
+  const resetSync = () => {
+    setPlan(null);
+    setApplyConflicts([]);
+    setSyncIssues([]);
+  };
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,8 +105,10 @@ export const TaskFileImport = ({ projectId, phases, onTasksImported }: TaskFileI
   const takeFile = async (file: File) => {
     setIssues([]);
     setImported([]);
+    resetSync();
 
-    const result = await readAttachment(file, MAX_TEMPLATE_CHARS);
+    const maxChars = isSyncFile(file.name) ? MAX_SYNC_FILE_CHARS : MAX_TEMPLATE_CHARS;
+    const result = await readAttachment(file, maxChars, TASK_IMPORT_EXTENSIONS);
     if (!result.ok) {
       setAttachment(null);
       setReadError(result.error);
@@ -92,6 +123,7 @@ export const TaskFileImport = ({ projectId, phases, onTasksImported }: TaskFileI
     setAttachment(null);
     setReadError(null);
     setIssues([]);
+    resetSync();
     // Sin esto, volver a elegir el mismo archivo no dispara `change`.
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -157,6 +189,76 @@ export const TaskFileImport = ({ projectId, phases, onTasksImported }: TaskFileI
       });
     }
   };
+
+  const attachedDocument = () => ({ fileName: attachment!.fileName, content: attachment!.content });
+
+  const handlePreview = async () => {
+    if (!attachment || isImporting) return;
+    setIsImporting(true);
+    resetSync();
+    setImported([]);
+    setWarnings([]);
+    try {
+      setPlan(await projectService.previewTaskSync(projectId, attachedDocument()));
+    } catch (error: unknown) {
+      const response = (error as HttpError).response;
+      if (response?.status === 422 && response.data?.issues?.length) {
+        setSyncIssues(response.data.issues);
+        return;
+      }
+      const message = error instanceof Error ? error.message : "No se pudo leer el archivo";
+      toast({ title: "Error", description: message, variant: "destructive" });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleApply = async () => {
+    if (!attachment || !plan || isImporting) return;
+    setIsImporting(true);
+    try {
+      const result = await projectService.applyTaskSync(projectId, {
+        document: attachedDocument(),
+        planHash: plan.planHash,
+        applyConflicts,
+      });
+      const parts = summaryParts({ ...result.applied, conflicts: 0 });
+      const skipped = result.skippedConflicts.length;
+      toast({
+        title: "Tareas actualizadas",
+        description: [
+          parts.length ? parts.join(", ") : "Sin cambios",
+          skipped ? `${skipped} en conflicto ${skipped === 1 ? "conservada" : "conservadas"} como estaban` : "",
+        ].filter(Boolean).join(". ") + ".",
+      });
+      clearAttachment();
+      onTasksImported();
+    } catch (error: unknown) {
+      const response = (error as HttpError).response;
+      // La base cambió desde la vista previa: se enseña la nueva para que se revise.
+      if (response?.status === 409 && response.data?.plan) {
+        setPlan(response.data.plan);
+        setApplyConflicts([]);
+        toast({
+          title: "El proyecto cambió",
+          description: "Alguien modificó tareas mientras revisabas. Revisa la vista previa actualizada y confirma de nuevo.",
+        });
+        return;
+      }
+      if (response?.status === 422 && response.data?.issues?.length) {
+        setPlan(null);
+        setSyncIssues(response.data.issues);
+        return;
+      }
+      const message = error instanceof Error ? error.message : "No se pudo importar el archivo";
+      toast({ title: "Error", description: message, variant: "destructive" });
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const toggleConflict = (taskId: string, apply: boolean) =>
+    setApplyConflicts((current) => (apply ? [...current, taskId] : current.filter((id) => id !== taskId)));
 
   const handleImport = async () => {
     if (!attachment || isImporting) return;
@@ -232,6 +334,11 @@ export const TaskFileImport = ({ projectId, phases, onTasksImported }: TaskFileI
             área, responsable, estado, prioridad, fechas, descripción y conclusión, igual
             que si la crearas a mano.
           </p>
+          <p className="text-xs text-muted-foreground">
+            Para <strong>actualizar</strong> las tareas existentes, usa <strong>Exportar</strong> en
+            la cabecera, edita el <code>.json</code> (a mano o con Claude Code) y súbelo aquí: verás
+            qué cambia antes de aplicarlo.
+          </p>
           {/* `asChild`, y no un <Button> dentro de un <a>: un <button> anidado en un
               enlace es el elemento activable más cercano, así que se queda el clic y el
               enlace no llega a navegar — el botón parece muerto. Con `asChild` el propio
@@ -263,13 +370,13 @@ export const TaskFileImport = ({ projectId, phases, onTasksImported }: TaskFileI
           <Upload className="h-5 w-5 text-muted-foreground" />
           <span className="text-sm font-medium">Selecciona un archivo</span>
           <span className="text-xs text-muted-foreground">
-            o arrástralo aquí — {extensions}, hasta {MAX_TEMPLATE_TASKS} tareas
+            o arrástralo aquí — {extensions}. Plantilla: hasta {MAX_TEMPLATE_TASKS} tareas
           </span>
         </button>
         <input
           ref={fileInputRef}
           type="file"
-          accept={DOCUMENT_ACCEPT_ATTRIBUTE}
+          accept={TASK_IMPORT_ACCEPT_ATTRIBUTE}
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
@@ -282,6 +389,12 @@ export const TaskFileImport = ({ projectId, phases, onTasksImported }: TaskFileI
             <AlertCircle className="h-3.5 w-3.5 shrink-0 mt-px" />
             <span>{readError}</span>
           </div>
+        )}
+
+        {syncIssues.length > 0 && <TaskSyncIssues issues={syncIssues} />}
+
+        {plan && (
+          <TaskSyncPreview plan={plan} applyConflicts={applyConflicts} onToggleConflict={toggleConflict} />
         )}
 
         {/* Problemas del archivo. En el panel y no como toast: un toast dura unos
@@ -413,19 +526,36 @@ export const TaskFileImport = ({ projectId, phases, onTasksImported }: TaskFileI
               <X className="h-3 w-3" />
             </Button>
           </div>
-          <Button onClick={handleImport} disabled={isImporting} className="w-full" size="sm">
-            {isImporting ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Importando...
-              </>
-            ) : (
-              <>
-                <Upload className="h-4 w-4 mr-2" />
-                Importar tareas
-              </>
-            )}
-          </Button>
+          {!isSyncFile(attachment.fileName) ? (
+            <Button onClick={handleImport} disabled={isImporting} className="w-full" size="sm">
+              {isImporting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Importando...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Importar tareas
+                </>
+              )}
+            </Button>
+          ) : !plan ? (
+            <Button onClick={handlePreview} disabled={isImporting} className="w-full" size="sm">
+              {isImporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+              Previsualizar cambios
+            </Button>
+          ) : (
+            <Button
+              onClick={handleApply}
+              disabled={isImporting || (plan.summary.creates + plan.summary.updates + plan.summary.deletes + plan.summary.moves === 0)}
+              className="w-full"
+              size="sm"
+            >
+              {isImporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-2" />}
+              Confirmar e importar
+            </Button>
+          )}
         </div>
       )}
     </div>
