@@ -106,6 +106,14 @@ export const projectService = {
   },
 
   /**
+   * Guarda el orden de una columna del Kanban: la posición en `orderedIds` es el
+   * `orderIndex`. Sólo para el equipo; el backend responde 403 a pmo, client y viewer.
+   */
+  reorderProjectTasks: async (projectId: string, orderedIds: string[]): Promise<void> => {
+    await api.put(`/projects/${projectId}/tasks/reorder`, { orderedIds });
+  },
+
+  /**
    * Alta de tareas desde la plantilla Markdown. El archivo se lee en el navegador
    * (`readAttachment`) y viaja como texto: no se sube a ningún sitio.
    *
