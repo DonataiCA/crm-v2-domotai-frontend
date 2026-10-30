@@ -1,5 +1,6 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ProjectForm } from "./ProjectForm";
+import { projectToFormValues } from "./form/project-to-form-values";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
 import { useOrganization } from "@/contexts/OrganizationContext";
@@ -50,7 +51,7 @@ export const ProjectEditDialog = ({ project, open, onOpenChange }: ProjectEditDi
 
         <div className="flex-1 overflow-y-auto px-6">
           <ProjectForm
-            initialData={project}
+            initialData={projectToFormValues(project)}
             onSuccess={handleSuccess}
             onCancel={() => onOpenChange(false)}
           />
