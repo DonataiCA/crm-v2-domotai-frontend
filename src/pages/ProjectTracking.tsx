@@ -14,6 +14,7 @@ import { ProjectGanttChart } from "@/components/project-tracking/ProjectGanttCha
 import { ProjectPRDPanel } from "@/components/project-tracking/ProjectPRDPanel";
 import { aiService } from "@/services/ai.service";
 import { TaskFileImport } from "@/components/project-tracking/TaskFileImport";
+import { ProjectExportDialog } from "@/components/project-tracking/ProjectExportDialog";
 import { BreadcrumbNav } from "@/components/ui/breadcrumb-nav";
 import { ShareProjectDialog } from "@/components/projects/ShareProjectDialog";
 import { ProjectReposManager } from "@/components/projects/ProjectReposManager";
@@ -41,23 +42,11 @@ const ProjectTracking = () => {
   const [importOpen, setImportOpen] = useState(false);
   const [isGeneratingFromPrd, setIsGeneratingFromPrd] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   // El panel de importar se ensancha cuando enseña la vista previa del JSON.
   const [importPreviewOpen, setImportPreviewOpen] = useState(false);
   const handleImportPreviewChange = useCallback((open: boolean) => setImportPreviewOpen(open), []);
 
-  /** Descarga `tasks-<proyecto>-<fecha>.json` para trabajarlo fuera y reimportarlo. */
-  const handleExport = async () => {
-    if (!projectId || isExporting) return;
-    setIsExporting(true);
-    try {
-      await projectService.exportTasks(projectId);
-    } catch {
-      toast({ title: "No se pudieron exportar las tareas", variant: "destructive" });
-    } finally {
-      setIsExporting(false);
-    }
-  };
 
   const canEdit = canEditProjects(userRole || '');
   const needsSetup = (!phases || phases.length === 0) && (!tasks || tasks.length === 0);
@@ -214,23 +203,29 @@ const ProjectTracking = () => {
     <>
       <BreadcrumbNav items={breadcrumbItems} />
 
-        <div className="mb-6 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Button variant="outline" size="sm" onClick={() => navigate("/project-dashboard")}>
+        {/* El título se lleva el espacio flexible, con un mínimo; las acciones van a su
+            derecha con un hueco fijo y, si no caben, bajan a otra línea alineadas a la
+            derecha. Antes eran dos bloques con `justify-between` y la descripción llegaba
+            hasta los botones sin margen. */}
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
+          <div className="flex items-start gap-4 flex-1 min-w-[min(100%,40rem)]">
+            <Button variant="outline" size="sm" className="mt-1.5 shrink-0" onClick={() => navigate("/project-dashboard")}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               Back
             </Button>
-            <div>
-              <h1 className="text-3xl font-bold">{project?.name}</h1>
-              <p className="text-muted-foreground">{project?.description}</p>
+            <div className="min-w-0">
+              <h1 className="text-3xl font-bold break-words">{project?.name}</h1>
+              {project?.description && (
+                <p className="text-muted-foreground mt-1 max-w-3xl">{project.description}</p>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
             {canEdit && (
-              <Button onClick={handleExport} size="sm" variant="outline" disabled={isExporting}>
-                {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
-                Exportar
+              <Button onClick={() => setExportOpen(true)} size="sm" variant="outline">
+                <Download className="h-4 w-4 mr-2" />
+                Exportar datos de proyecto
               </Button>
             )}
             {canEdit && (
@@ -381,6 +376,13 @@ const ProjectTracking = () => {
           <span className="text-sm font-medium">Importar tareas</span>
         </Button>
       )}
+
+      <ProjectExportDialog
+        projectId={projectId || ''}
+        projectName={project?.name}
+        open={exportOpen}
+        onOpenChange={setExportOpen}
+      />
 
       <ShareProjectDialog
         projectId={projectId || ''}
