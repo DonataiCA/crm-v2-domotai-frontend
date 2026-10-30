@@ -1,4 +1,5 @@
 import api from '@/lib/api-client';
+import { downloadBlob, fileNameFromDisposition } from '@/lib/download';
 import {
   Project,
   ProjectPhase,
@@ -12,6 +13,8 @@ import {
   ImportTasksResponse,
   TaskDeliverable,
   ProjectLink,
+  TaskSyncPlan,
+  TaskSyncApplyResponse,
 } from '@/types/api';
 
 export const projectService = {
@@ -129,6 +132,41 @@ export const projectService = {
       `/projects/${projectId}/import-tasks`,
       { document },
     );
+    return data;
+  },
+
+  /**
+   * Descarga las tareas del proyecto como `tasks-<proyecto>-<fecha>.json`. El nombre lo
+   * decide el backend en `Content-Disposition`.
+   */
+  exportTasks: async (projectId: string): Promise<void> => {
+    const response = await api.get(`/projects/${projectId}/tasks/export`, { responseType: 'blob' });
+    const fileName = fileNameFromDisposition(response.headers['content-disposition'], `tasks-${projectId}.json`);
+    downloadBlob(response.data, fileName);
+  },
+
+  /**
+   * Qué cambiaría al importar el JSON, sin escribir nada. Como en `importTasks`, el 422
+   * con `{ issues }` no es un fallo de red: lo pinta el panel.
+   */
+  previewTaskSync: async (
+    projectId: string,
+    document: { fileName: string; content: string },
+  ): Promise<TaskSyncPlan> => {
+    const { data } = await api.post<TaskSyncPlan>(`/projects/${projectId}/tasks/sync/preview`, { document });
+    return data;
+  },
+
+  /**
+   * Aplica lo previsualizado. Responde 409 si el proyecto cambió desde la vista previa:
+   * hay que volver a previsualizar. `applyConflicts` son las tareas en conflicto que el
+   * usuario decidió sobrescribir.
+   */
+  applyTaskSync: async (
+    projectId: string,
+    body: { document: { fileName: string; content: string }; planHash: string; applyConflicts: string[] },
+  ): Promise<TaskSyncApplyResponse> => {
+    const { data } = await api.post<TaskSyncApplyResponse>(`/projects/${projectId}/tasks/sync/apply`, body);
     return data;
   },
 

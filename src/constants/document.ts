@@ -39,3 +39,18 @@ export const MAX_TEMPLATE_CHARS = 40000;
 
 /** Tope de tareas por archivo de plantilla. El límite es inclusivo. */
 export const MAX_TEMPLATE_TASKS = 100;
+
+/**
+ * Extensiones del panel "Importar tareas": la plantilla Markdown (sólo crea) y el JSON
+ * exportado del propio CRM (sincroniza). Lista aparte de `ACCEPTED_DOCUMENT_EXTENSIONS`
+ * para que el chat de tareas, que manda el contenido a OpenAI, no acepte JSON.
+ */
+export const TASK_IMPORT_EXTENSIONS = ['.md', '.txt', '.json'] as const;
+export const TASK_IMPORT_ACCEPT_ATTRIBUTE = TASK_IMPORT_EXTENSIONS.join(',');
+
+/**
+ * Tope del JSON de tareas, el mismo que `MAX_SYNC_FILE_CHARS` del backend. Un export
+ * lleva descripciones, entregables y comentarios de hasta `MAX_SYNC_TASKS` tareas.
+ */
+export const MAX_SYNC_FILE_CHARS = 5_000_000;
+export const MAX_SYNC_TASKS = 1000;
